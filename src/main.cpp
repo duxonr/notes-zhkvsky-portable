@@ -39,7 +39,7 @@ int main(int argc, char *argv[])
         QTextStream out(&report);
         out << "settings=" << portableSettings() << '\n'
             << "database=" << portableDatabase() << '\n'
-            << "instance=com.zhkvsky.notes.portable\n";
+            << "instance=" << portableInstanceName() << '\n';
         return EXIT_SUCCESS;
     }
 #endif
@@ -113,7 +113,7 @@ int main(int argc, char *argv[])
 
     // Prevent many instances of the app to be launched
 #ifdef NOTES_PORTABLE
-    QString name = "com.zhkvsky.notes.portable";
+    QString name = portableInstanceName();
 #else
     QString name = "com.awsomeness.notes";
 #endif

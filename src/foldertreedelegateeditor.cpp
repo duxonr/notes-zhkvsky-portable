@@ -12,6 +12,8 @@
 #include "notelistview.h"
 #include "labeledittype.h"
 #include "fontloader.h"
+#include "rowactionbutton.h"
+#include "treefoldericon.h"
 
 FolderTreeDelegateEditor::FolderTreeDelegateEditor(QTreeView *view, const QStyleOptionViewItem &option, const QModelIndex &index, QListView *listView,
                                                    QWidget *parent)
@@ -68,7 +70,7 @@ FolderTreeDelegateEditor::FolderTreeDelegateEditor(QTreeView *view, const QStyle
         layout->addSpacing(2);
     }
 
-    m_folderIcon = new PushButtonType(parent);
+    m_folderIcon = new TreeFolderIconButton(m_index.parent().data(NodeItem::ItemType).toInt() == NodeItem::FolderItem, this);
     m_folderIcon->setMaximumSize({ 19, 20 });
     m_folderIcon->setMinimumSize({ 19, 20 });
     m_folderIcon->setIconSize(QSize(19, 20));
@@ -100,20 +102,20 @@ FolderTreeDelegateEditor::FolderTreeDelegateEditor(QTreeView *view, const QStyle
     layout->addWidget(m_label);
     layout->addSpacing(5);
     auto *tree = static_cast<NodeTreeView *>(m_view);
-    const auto addAction = [this, layout, tree](const QString &glyph, const QString &tip, NodeTreeView::RowAction action) {
-        auto *button = new PushButtonType(this);
+    const auto addAction = [this, layout, tree](RowIcon icon, const QString &tip, NodeTreeView::RowAction action) {
+        auto *button = new RowActionButton(icon, this);
         button->setFixedSize(20, 25);
         button->setFont(font_loader::loadFont("Font Awesome 6 Free Solid", "", 9));
-        button->setText(glyph);
+        button->setAccessibleName(tip);
         button->setToolTip(tip);
         button->setCursor(Qt::PointingHandCursor);
         connect(button, &QPushButton::clicked, tree, [tree, index = m_index, action] { tree->triggerRowAction(index, action); });
         layout->addWidget(button);
         m_actions.append(button);
     };
-    addAction(QString::fromUtf8(u8"\uf65e"), tr("Create subfolder"), NodeTreeView::RowAction::AddSubfolder);
-    addAction(QString::fromUtf8(u8"\uf303"), tr("Rename folder"), NodeTreeView::RowAction::Rename);
-    addAction(QString::fromUtf8(u8"\uf1f8"), tr("Delete folder"), NodeTreeView::RowAction::Delete);
+    addAction(RowIcon::FolderPlus, tr("Create subfolder"), NodeTreeView::RowAction::AddSubfolder);
+    addAction(RowIcon::Pencil, tr("Rename folder"), NodeTreeView::RowAction::Rename);
+    addAction(RowIcon::Trash, tr("Delete folder"), NodeTreeView::RowAction::Delete);
     m_count = new QLabel(this);
     m_count->setFixedWidth(32);
     m_count->setAlignment(Qt::AlignCenter);
@@ -147,14 +149,19 @@ void FolderTreeDelegateEditor::updateDelegate()
                         .arg(QString::number(m_folderIconColor.red()), QString::number(m_folderIconColor.green()), QString::number(m_folderIconColor.blue()));
     }
     const QColor customIconColor = static_cast<NodeTreeView *>(m_view)->folderIconColor(m_index);
+    const bool selected = m_view->selectionModel()->isSelected(m_index);
+    m_folderIcon->setAppearance(customIconColor.isValid() ? customIconColor : selected ? m_titleSelectedColor : m_folderIconColor, customIconColor.isValid() && selected);
     if (customIconColor.isValid())
         folderIconStyle = "QPushButton {border:0; padding:0; color:" + customIconColor.name() + ";}";
     m_label->setText(displayName);
     m_count->setText(QString::number(m_index.data(NodeItem::ChildCount).toInt()));
     const QString color = m_view->selectionModel()->isSelected(m_index) ? "white" : m_titleColor.name();
-    m_count->setStyleSheet("QLabel {color:" + color + ";}");
-    for (int i = 0; i < m_actions.size(); ++i)
-        m_actions[i]->setStyleSheet("QPushButton {border:0; padding:0; color:" + color + ";} QPushButton:hover {color:" + (i == 2 ? QString("#d34d4d") : QString("#448ac9")) + ";}");
+    const QString countStyle = "QLabel {color:" + color + ";}";
+    if (m_count->styleSheet() != countStyle) m_count->setStyleSheet(countStyle);
+    for (int i = 0; i < m_actions.size(); ++i) {
+        const QString style = "QPushButton {border:0; padding:0; color:" + color + ";} QPushButton:hover {color:" + (i == 2 ? QString("#d34d4d") : QString("#448ac9")) + ";}";
+        if (m_actions[i]->styleSheet() != style) m_actions[i]->setStyleSheet(style);
+    }
     auto theme = static_cast<NodeTreeView *>(m_view)->theme();
 
     QColor chevronColor(theme == Theme::Dark ? QColor(169, 160, 172) : QColor(103, 99, 105));
@@ -236,7 +243,7 @@ void FolderTreeDelegateEditor::setTheme(Theme::Value theme)
 
 void FolderTreeDelegateEditor::resizeEvent(QResizeEvent *event)
 {
-    for (auto *button : m_actions) button->setVisible(event->size().width() >= 150);
+    for (auto *button : m_actions) button->setVisible(event->size().width() >= 160);
     QWidget::resizeEvent(event);
 }
 

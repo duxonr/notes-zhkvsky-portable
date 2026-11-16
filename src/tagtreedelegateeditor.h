@@ -8,6 +8,7 @@
 #include "editorsettingsoptions.h"
 
 class QTreeView;
+class QPushButton;
 class QLabel;
 class PushButtonType;
 class LabelEditType;
@@ -33,7 +34,7 @@ private:
     QTreeView *m_view;
     QListView *m_listView;
     LabelEditType *m_label;
-    QList<PushButtonType *> m_actions;
+    QList<QPushButton *> m_actions;
     QLabel *m_count;
     Theme::Value m_theme;
     void updateDelegate();

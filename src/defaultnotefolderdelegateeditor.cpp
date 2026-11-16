@@ -1,5 +1,6 @@
 #include "defaultnotefolderdelegateeditor.h"
 #include "nodetreeview.h"
+#include "treefoldericon.h"
 #include <QPainter>
 #include <QDebug>
 #include <QTreeView>
@@ -74,7 +75,7 @@ void DefaultNoteFolderDelegateEditor::paintEvent(QPaintEvent *event)
     const QColor customIconColor = static_cast<NodeTreeView *>(m_view)->folderIconColor(m_index);
     if (customIconColor.isValid()) painter.setPen(customIconColor);
     painter.setFont(font_loader::loadFont("Material Symbols Outlined", "", 16 + iconPointSizeOffset));
-    painter.drawText(folderIconRect, u8"\ue2c7"); // folder
+    drawTreeFolderIcon(painter, folderIconRect, customIconColor.isValid() ? customIconColor : m_view->selectionModel()->isSelected(m_index) ? m_titleSelectedColor : m_folderIconColor, false, customIconColor.isValid() && m_view->selectionModel()->isSelected(m_index));
 
     QRect nameRect(rect());
     nameRect.setLeft(folderIconRect.x() + folderIconRect.width() + 5);

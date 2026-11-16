@@ -14,6 +14,7 @@
 #include "allnotebuttontreedelegateeditor.h"
 #include <QFontMetrics>
 #include "fontloader.h"
+#include "treefoldericon.h"
 
 NodeTreeDelegate::NodeTreeDelegate(QTreeView *view, QObject *parent, QListView *listView)
     : QStyledItemDelegate{ parent },
@@ -218,7 +219,9 @@ void NodeTreeDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opti
         const QColor customIconColor = static_cast<NodeTreeView *>(m_view)->folderIconColor(index);
         if (customIconColor.isValid()) painter->setPen(customIconColor);
         painter->setFont(font_loader::loadFont("Material Symbols Outlined", "", 16 + iconPointSizeOffset));
-        painter->drawText(folderIconRect, index.parent().data(NodeItem::ItemType).toInt() == NodeItem::FolderItem ? QString::fromUtf8(u8"\ue2c8") : QString::fromUtf8(u8"\ue2c7")); // hierarchy
+        drawTreeFolderIcon(*painter, folderIconRect,
+            customIconColor.isValid() ? customIconColor : (option.state & QStyle::State_Selected) ? m_titleSelectedColor : m_folderIconColor,
+            index.parent().data(NodeItem::ItemType).toInt() == NodeItem::FolderItem, customIconColor.isValid() && (option.state & QStyle::State_Selected));
 
         QRect nameRect(option.rect);
         nameRect.setLeft(folderIconRect.x() + folderIconRect.width() + 5);

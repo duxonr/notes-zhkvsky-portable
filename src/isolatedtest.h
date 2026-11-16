@@ -7,6 +7,7 @@
 #include <QFile>
 #include <QString>
 #include <QUuid>
+#include <QCryptographicHash>
 
 // All persistent application data belongs to the directory containing Notes.exe.
 inline QString portableRoot()
@@ -22,6 +23,16 @@ inline QString portableSettings()
 inline QString portableDatabase()
 {
     return QDir(portableRoot()).filePath(QStringLiteral("Data/notes.db"));
+}
+
+inline QString portableInstanceName()
+{
+    QString root = QFileInfo(portableRoot()).canonicalFilePath();
+#ifdef Q_OS_WIN
+    root = root.toCaseFolded();
+#endif
+    return QStringLiteral("com.zhkvsky.notes.portable.")
+        + QString::fromLatin1(QCryptographicHash::hash(root.toUtf8(), QCryptographicHash::Sha256).toHex());
 }
 
 inline bool validatePortablePaths()

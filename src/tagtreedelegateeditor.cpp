@@ -12,6 +12,7 @@
 #include "labeledittype.h"
 #include "notelistview.h"
 #include "fontloader.h"
+#include "rowactionbutton.h"
 
 TagTreeDelegateEditor::TagTreeDelegateEditor(QTreeView *view, const QStyleOptionViewItem &option, const QModelIndex &index, QListView *listView,
                                              QWidget *parent)
@@ -64,20 +65,20 @@ TagTreeDelegateEditor::TagTreeDelegateEditor(QTreeView *view, const QStyleOption
     connect(static_cast<NodeTreeView *>(m_view), &NodeTreeView::renameTagRequested, m_label, &LabelEditType::openEditor);
     layout->addWidget(m_label);
     auto *tree = static_cast<NodeTreeView *>(m_view);
-    const auto addAction = [this, layout, tree](const QString &glyph, const QString &tip, NodeTreeView::RowAction action) {
-        auto *button = new PushButtonType(this);
+    const auto addAction = [this, layout, tree](RowIcon icon, const QString &tip, NodeTreeView::RowAction action) {
+        auto *button = new RowActionButton(icon, this);
         button->setFixedSize(20, 25);
         button->setFont(font_loader::loadFont("Font Awesome 6 Free Solid", "", 9));
-        button->setText(glyph);
+        button->setAccessibleName(tip);
         button->setToolTip(tip);
         button->setCursor(Qt::PointingHandCursor);
         connect(button, &QPushButton::clicked, tree, [tree, index = m_index, action] { tree->triggerRowAction(index, action); });
         layout->addWidget(button);
         m_actions.append(button);
     };
-    addAction(QString::fromUtf8(u8"\uf53f"), tr("Change tag color"), NodeTreeView::RowAction::Color);
-    addAction(QString::fromUtf8(u8"\uf303"), tr("Rename tag"), NodeTreeView::RowAction::Rename);
-    addAction(QString::fromUtf8(u8"\uf1f8"), tr("Delete tag"), NodeTreeView::RowAction::Delete);
+    addAction(RowIcon::Palette, tr("Change tag color"), NodeTreeView::RowAction::Color);
+    addAction(RowIcon::Pencil, tr("Rename tag"), NodeTreeView::RowAction::Rename);
+    addAction(RowIcon::Trash, tr("Delete tag"), NodeTreeView::RowAction::Delete);
     m_count = new QLabel(this);
     m_count->setFixedWidth(32);
     m_count->setAlignment(Qt::AlignCenter);
@@ -103,9 +104,12 @@ void TagTreeDelegateEditor::updateDelegate()
     m_label->setText(displayName);
     m_count->setText(QString::number(m_index.data(NodeItem::ChildCount).toInt()));
     const QString color = m_view->selectionModel()->isSelected(m_index) ? "white" : m_titleColor.name();
-    m_count->setStyleSheet("QLabel {color:" + color + ";}");
-    for (int i = 0; i < m_actions.size(); ++i)
-        m_actions[i]->setStyleSheet("QPushButton {border:0; padding:0; color:" + color + ";} QPushButton:hover {color:" + (i == 2 ? QString("#d34d4d") : QString("#448ac9")) + ";}");
+    const QString countStyle = "QLabel {color:" + color + ";}";
+    if (m_count->styleSheet() != countStyle) m_count->setStyleSheet(countStyle);
+    for (int i = 0; i < m_actions.size(); ++i) {
+        const QString style = "QPushButton {border:0; padding:0; color:" + color + ";} QPushButton:hover {color:" + (i == 2 ? QString("#d34d4d") : QString("#448ac9")) + ";}";
+        if (m_actions[i]->styleSheet() != style) m_actions[i]->setStyleSheet(style);
+    }
 
 
     if (m_label->styleSheet() != labelStyle) {
@@ -181,6 +185,6 @@ void TagTreeDelegateEditor::setTheme(Theme::Value theme)
 
 void TagTreeDelegateEditor::resizeEvent(QResizeEvent *event)
 {
-    for (auto *button : m_actions) button->setVisible(event->size().width() >= 150);
+    for (auto *button : m_actions) button->setVisible(event->size().width() >= 160);
     QWidget::resizeEvent(event);
 }

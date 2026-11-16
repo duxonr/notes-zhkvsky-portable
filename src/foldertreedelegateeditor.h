@@ -8,6 +8,8 @@
 #include "editorsettingsoptions.h"
 
 class QTreeView;
+class QPushButton;
+class TreeFolderIconButton;
 class QLabel;
 class PushButtonType;
 class LabelEditType;
@@ -34,11 +36,11 @@ private:
     QTreeView *m_view;
     QListView *m_listView;
     LabelEditType *m_label;
-    PushButtonType *m_folderIcon;
+    TreeFolderIconButton *m_folderIcon;
     QPixmap m_expanded;
     QPixmap m_notExpanded;
     QLabel *m_expandIcon;
-    QList<PushButtonType *> m_actions;
+    QList<QPushButton *> m_actions;
     QLabel *m_count;
     Theme::Value m_theme;
     void updateDelegate();
