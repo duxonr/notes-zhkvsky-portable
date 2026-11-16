@@ -452,57 +452,25 @@ void NoteListView::startDrag(Qt::DropActions supportedActions)
     if (mimeData == nullptr) {
         return;
     }
-    QRect rect;
-    QPixmap pixmap;
-    if (indexes.size() == 1) {
-        auto current = indexes[0];
-        auto id = current.data(NoteListModel::NoteID).toInt();
-        if (m_openedEditor.contains(id)) {
-            QItemViewPaintPairs paintPairs = d->draggablePaintPairs(indexes, &rect);
-            Q_UNUSED(paintPairs);
-            auto wl = m_openedEditor[id];
-            if (!wl.empty()) {
-                pixmap = wl.first()->grab();
-            } else {
-                qDebug() << __FUNCTION__ << "Dragging row" << current.row() << "is in opened editor list but editor widget is null";
-            }
-        } else {
-            pixmap = d->renderToPixmap(indexes, &rect);
+    const qreal ratio = devicePixelRatioF();
+    QPixmap pixmap(QSize(indexes.size() > 1 ? 48 : 32, 32) * ratio);
+    pixmap.setDevicePixelRatio(ratio);
+    pixmap.fill(Qt::transparent);
+    {
+        QPainter painter(&pixmap);
+        painter.setRenderHint(QPainter::Antialiasing);
+        painter.drawPixmap(QRect(0, 0, 28, 28), QPixmap(":/images/notepad.ico"));
+        if (indexes.size() > 1) {
+            painter.setPen(Qt::NoPen);
+            painter.setBrush(QColor(68, 138, 201));
+            painter.drawRoundedRect(QRect(23, 13, 25, 18), 6, 6);
+            painter.setPen(Qt::white);
+            QFont countFont = font();
+            countFont.setPixelSize(11);
+            countFont.setBold(true);
+            painter.setFont(countFont);
+            painter.drawText(QRect(23, 13, 25, 18), Qt::AlignCenter, QString::number(indexes.size()));
         }
-        auto const *noteListModel = static_cast<NoteListModel *>(this->model());
-        if ((noteListModel != nullptr) && noteListModel->hasPinnedNote()
-            && (noteListModel->isFirstPinnedNote(current) || noteListModel->isFirstUnpinnedNote(current))) {
-            QRect r(0, 25, rect.width(), rect.height() - 25);
-            pixmap = pixmap.copy(r);
-            rect.setHeight(rect.height() - 25);
-        }
-        rect.adjust(horizontalOffset(), verticalOffset(), 0, 0);
-    } else {
-        pixmap.load(":/images/notepad.ico");
-        pixmap = pixmap.scaled(pixmap.width() / 4, pixmap.height() / 4, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-#ifdef __APPLE__
-        QFont displayFont(QFont(QStringLiteral("SF Pro Text")).exactMatch() ? QStringLiteral("SF Pro Text") : QStringLiteral("Roboto"));
-#elif _WIN32
-        QFont displayFont(QFont(QStringLiteral("Segoe UI")).exactMatch() ? QStringLiteral("Segoe UI") : QStringLiteral("Roboto"));
-#else
-        QFont displayFont(QStringLiteral("Roboto"));
-#endif
-        displayFont.setPixelSize(16);
-        QFontMetrics fmContent(displayFont);
-        QString sz = QString::number(indexes.size());
-        QRect szRect = fmContent.boundingRect(sz);
-        QPixmap px(pixmap.width() + szRect.width(), pixmap.height());
-        px.fill(Qt::transparent);
-
-        QRect nameRect(px.rect());
-        QPainter painter(&px);
-        painter.setPen(Qt::red);
-        painter.drawPixmap(0, 0, pixmap);
-        painter.setFont(displayFont);
-        painter.drawText(nameRect, Qt::AlignRight | Qt::AlignBottom, sz);
-        painter.end();
-        std::swap(pixmap, px);
-        rect = px.rect();
     }
     m_isDraggingPinnedNotes = false;
     m_isDraggingPinnedNotes =
@@ -510,11 +478,7 @@ void NoteListView::startDrag(Qt::DropActions supportedActions)
     auto *drag = new QDrag(this);
     drag->setPixmap(pixmap);
     drag->setMimeData(mimeData);
-    if (indexes.size() == 1) {
-        drag->setHotSpot(d->pressedPosition - rect.topLeft());
-    } else {
-        drag->setHotSpot({ 0, 0 });
-    }
+    drag->setHotSpot(QPoint(8, 8));
     auto openedEditors = m_openedEditor.keys();
     m_isDragging = true;
     Qt::DropAction dropAction = drag->exec(Qt::MoveAction);
