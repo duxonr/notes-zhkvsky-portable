@@ -6,15 +6,43 @@
 
 #include "mainwindow.h"
 #include "singleinstance.h"
+#include "isolatedtest.h"
 #include <QApplication>
 #include <QFontDatabase>
+#ifdef NOTES_PORTABLE
+#include <QFile>
+#include <QTextStream>
+#include <QSettings>
+#endif
 
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
     // Set application information
+#ifdef NOTES_PORTABLE
+    QApplication::setApplicationName("Notes ZHKVSKY Portable");
+#else
     QApplication::setApplicationName("Notes");
+#endif
     QApplication::setApplicationVersion(APP_VERSION);
+
+#ifdef NOTES_PORTABLE
+    if (!validatePortablePaths())
+        return EXIT_FAILURE;
+    QSettings probe(portableSettings(), QSettings::IniFormat);
+    if (QDir::cleanPath(probe.fileName()) != QDir::cleanPath(portableSettings()))
+        return EXIT_FAILURE;
+    if (app.arguments().contains(QStringLiteral("--verify-portable-isolation"))) {
+        QFile report(QDir(portableRoot()).filePath(QStringLiteral("Settings/isolation-report.txt")));
+        if (!report.open(QIODevice::WriteOnly | QIODevice::Text))
+            return EXIT_FAILURE;
+        QTextStream out(&report);
+        out << "settings=" << portableSettings() << '\n'
+            << "database=" << portableDatabase() << '\n'
+            << "instance=com.zhkvsky.notes.portable\n";
+        return EXIT_SUCCESS;
+    }
+#endif
 
 #if defined(Q_OS_UNIX) && !defined(Q_OS_MACOS)
     QApplication::setDesktopFileName(APP_ID);
@@ -84,7 +112,11 @@ int main(int argc, char *argv[])
     QFontDatabase::addApplicationFont(":/fonts/iaquattro/iAWriterQuattroS-BoldItalic.ttf");
 
     // Prevent many instances of the app to be launched
+#ifdef NOTES_PORTABLE
+    QString name = "com.zhkvsky.notes.portable";
+#else
     QString name = "com.awsomeness.notes";
+#endif
     SingleInstance instance;
     if (SingleInstance::hasPrevious(name)) {
         return EXIT_SUCCESS;

@@ -14,6 +14,7 @@
 #include "splitterstyle.h"
 #include "editorsettingsoptions.h"
 #include "fontloader.h"
+#include "isolatedtest.h"
 #include <utils.h>
 
 #include <QScrollBar>
@@ -178,6 +179,10 @@ void MainWindow::initData()
     QString oldTrashDBPath = QStringLiteral("%1/Trash.ini").arg(dir.path());
 
     bool isV0_9_0 = (QFile::exists(oldNoteDBPath) || QFile::exists(oldTrashDBPath));
+#ifdef NOTES_PORTABLE
+    if (isV0_9_0 && !backupPortableFiles({oldNoteDBPath, oldTrashDBPath, portableDatabase(), portableSettings()}))
+        qFatal("Portable legacy backup failed; migration stopped");
+#endif
     if (isV0_9_0) {
         auto *pd = new QProgressDialog(tr("Migrating database, please wait."), QString(), 0, 0, this);
         pd->setCancelButton(nullptr);
@@ -602,6 +607,7 @@ void MainWindow::setupKeyboardShortcuts()
     connect(new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_6), this), &QShortcut::activated, this, [=]() { setHeading(6); });
     new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Backslash), this, SLOT(resetBlockFormat()));
 
+#ifndef NOTES_PORTABLE
     auto *shortcut = new QxtGlobalShortcut(this);
 #if defined(Q_OS_MACOS)
     shortcut->setShortcut(QKeySequence(Qt::META | Qt::Key_N));
@@ -623,6 +629,7 @@ void MainWindow::setupKeyboardShortcuts()
         m_textEdit->setDisabled(false);
         m_searchEdit->setDisabled(false);
     });
+#endif
 #if QT_VERSION >= QT_VERSION_CHECK(6, 2, 0)
     connect(new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_K), this), &QShortcut::activated, this, [=]() {
         if (m_kanbanWidget->isHidden()) {
@@ -1515,7 +1522,11 @@ void MainWindow::openSubscriptionWindow()
  */
 void MainWindow::setupDatabases()
 {
+#ifdef NOTES_PORTABLE
+    m_settingsDatabase = new QSettings(portableSettings(), QSettings::IniFormat, this);
+#else
     m_settingsDatabase = new QSettings(QSettings::IniFormat, QSettings::UserScope, QStringLiteral("Awesomeness"), QStringLiteral("Settings"), this);
+#endif
 
 #if !defined(PRO_VERSION)
 #  if defined(Q_OS_UNIX) && !defined(Q_OS_MACOS)
@@ -1535,6 +1546,11 @@ void MainWindow::setupDatabases()
     if (major < 2) {
         needMigrateFromV1_5_0 = true;
     }
+#ifdef NOTES_PORTABLE
+    if (needMigrateFromV1_5_0 && QFile::exists(portableDatabase())
+        && !backupPortableFiles({portableDatabase(), portableDatabase() + "-wal", portableDatabase() + "-shm", portableSettings()}))
+        qFatal("Portable database backup failed; migration stopped");
+#endif
     initializeSettingsDatabase();
 
     bool doCreate = false;
@@ -1543,9 +1559,17 @@ void MainWindow::setupDatabases()
     bool folderCreated = dir.mkpath(QStringLiteral("."));
     if (!folderCreated)
         qFatal("ERROR: Can't create settings folder : %s", dir.absolutePath().toStdString().c_str());
+#ifdef NOTES_PORTABLE
+    QString defaultDBPath = portableDatabase();
+#else
     QString defaultDBPath = QStringLiteral("%1%2notes.db").arg(dir.path(), QDir::separator());
+#endif
 
+#ifdef NOTES_PORTABLE
+    QString noteDBFilePath = portableDatabase();
+#else
     QString noteDBFilePath = m_settingsDatabase->value(QStringLiteral("noteDBFilePath"), QString()).toString();
+#endif
     if (noteDBFilePath.isEmpty()) {
         noteDBFilePath = defaultDBPath;
     }
@@ -1584,7 +1608,8 @@ void MainWindow::setupDatabases()
         needMigrateFromV1_5_0 = false;
     } else if (needMigrateFromV1_5_0) {
         QFile noteDBFile(noteDBFilePath);
-        noteDBFile.rename(dir.path() + QDir::separator() + QStringLiteral("oldNotes.db"));
+        if (!noteDBFile.rename(dir.path() + QDir::separator() + QStringLiteral("oldNotes.db")))
+            qFatal("ERROR : Can't move old database file; migration stopped");
         noteDBFile.setFileName(noteDBFilePath);
         if (!noteDBFile.open(QIODevice::WriteOnly))
             qFatal("ERROR : Can't create database file");
@@ -2010,10 +2035,12 @@ void MainWindow::setupGlobalSettingsMenu()
 #endif
 
     // Autostart
+#ifndef NOTES_PORTABLE
     QAction *autostartAction = m_mainMenu.addAction(tr("&Start automatically"));
     connect(autostartAction, &QAction::triggered, this, [=]() { m_autostart.setAutostart(autostartAction->isChecked()); });
     autostartAction->setCheckable(true);
     autostartAction->setChecked(m_autostart.isAutostart());
+#endif
 
     // hide to tray
     m_hideToTrayAction = m_mainMenu.addAction(tr("&Hide to tray"));
@@ -2027,6 +2054,7 @@ void MainWindow::setupGlobalSettingsMenu()
         }
     });
 
+#ifndef NOTES_PORTABLE
     QAction *changeDBPathAction = m_mainMenu.addAction(tr("&Change database path"));
     connect(changeDBPathAction, &QAction::triggered, this, [=]() {
         auto btn = QMessageBox::question(this, "Are you sure you want to change the database path?", "Are you sure you want to change the database path?");
@@ -2040,6 +2068,7 @@ void MainWindow::setupGlobalSettingsMenu()
             }
         }
     });
+#endif
 
     // About Notes
     QAction *aboutAction = m_mainMenu.addAction(tr("&About Notes"));

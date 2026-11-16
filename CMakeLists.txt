@@ -17,6 +17,7 @@ option(GIT_REVISION
 option(UPDATE_CHECKER
        "Enable or disable both the update checker and auto-updater" ON)
 option(PRO_VERSION "Enable or disable Notes Pro features" ON)
+option(NOTES_PORTABLE "Build a self-contained portable instance" OFF)
 option(ENABLE_ASAN "Enable address sanitizer" OFF)
 
 project(
@@ -24,6 +25,13 @@ project(
   VERSION ${APP_VERSION}
   DESCRIPTION "Note-taking app. Write down your thoughts"
   LANGUAGES CXX)
+
+if(NOTES_PORTABLE)
+  if(NOT PRO_VERSION OR UPDATE_CHECKER)
+    message(FATAL_ERROR "Portable build requires PRO_VERSION=ON and UPDATE_CHECKER=OFF")
+  endif()
+  add_definitions(-DNOTES_PORTABLE)
+endif()
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
