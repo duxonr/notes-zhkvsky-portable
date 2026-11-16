@@ -75,7 +75,7 @@ void DefaultNoteFolderDelegateEditor::paintEvent(QPaintEvent *event)
 
     QRect nameRect(rect());
     nameRect.setLeft(folderIconRect.x() + folderIconRect.width() + 5);
-    nameRect.setWidth(nameRect.width() - 5 - 40);
+    nameRect.setRight(rect().right() - 45);
 
     auto displayName = m_index.data(NodeItem::Roles::DisplayText).toString();
     QFontMetrics fm(m_titleFont);
@@ -89,8 +89,8 @@ void DefaultNoteFolderDelegateEditor::paintEvent(QPaintEvent *event)
     painter.setFont(m_titleFont);
     painter.drawText(nameRect, Qt::AlignLeft | Qt::AlignVCenter, displayName);
     auto childCountRect = rect();
-    childCountRect.setLeft(nameRect.right() + 5);
-    childCountRect.setWidth(childCountRect.width() - 5);
+    childCountRect.setLeft(childCountRect.right() - 39);
+    childCountRect.setWidth(32);
     auto childCount = m_index.data(NodeItem::Roles::ChildCount).toInt();
     if (m_view->selectionModel()->isSelected(m_index)) {
         painter.setPen(m_numberOfNotesSelectedColor);

@@ -5,6 +5,7 @@
 #include <QDebug>
 #include <QTreeView>
 #include <QMouseEvent>
+#include <QResizeEvent>
 #include "pushbuttontype.h"
 #include "nodetreemodel.h"
 #include "nodetreeview.h"
@@ -40,7 +41,7 @@ FolderTreeDelegateEditor::FolderTreeDelegateEditor(QTreeView *view, const QStyle
 {
     setContentsMargins(0, 0, 0, 0);
     auto *layout = new QHBoxLayout(this);
-    layout->setContentsMargins(10, 0, 0, 0);
+    layout->setContentsMargins(10, 0, 8, 0);
     layout->setSpacing(0);
     setLayout(layout);
     m_expandIcon = new QLabel(this);
@@ -58,7 +59,7 @@ FolderTreeDelegateEditor::FolderTreeDelegateEditor(QTreeView *view, const QStyle
 #else
     int iconPointSizeOffset = -4;
 #endif
-    m_expandIcon->setFont(font_loader::loadFont("Font Awesome 6 Free Solid", "", 10 + iconPointSizeOffset));
+    m_expandIcon->setFont(font_loader::loadFont("Font Awesome 6 Free Solid", "", 12 + iconPointSizeOffset));
 
     m_expandIcon->setScaledContents(true);
     layout->addWidget(m_expandIcon);
@@ -73,12 +74,14 @@ FolderTreeDelegateEditor::FolderTreeDelegateEditor(QTreeView *view, const QStyle
     m_folderIcon->setIconSize(QSize(19, 20));
     QFont materialSymbols("Material Symbols Outlined", 16 + iconPointSizeOffset);
     m_folderIcon->setFont(materialSymbols);
-    m_folderIcon->setText(u8"\ue2c7"); // folder
+    m_folderIcon->setText(m_index.parent().data(NodeItem::ItemType).toInt() == NodeItem::FolderItem ? u8"\ue2c8" : u8"\ue2c7"); // folder
     layout->addWidget(m_folderIcon);
     layout->addSpacing(5);
 
     m_label = new LabelEditType(this);
+    m_titleFont.setWeight(m_index.parent().data(NodeItem::ItemType).toInt() == NodeItem::FolderItem ? QFont::Normal : QFont::DemiBold);
     m_label->setFont(m_titleFont);
+    m_label->setMinimumWidth(0);
     QSizePolicy labelPolicy;
     labelPolicy.setVerticalPolicy(QSizePolicy::Expanding);
     labelPolicy.setHorizontalPolicy(QSizePolicy::Expanding);
@@ -96,50 +99,29 @@ FolderTreeDelegateEditor::FolderTreeDelegateEditor(QTreeView *view, const QStyle
     connect(static_cast<NodeTreeView *>(m_view), &NodeTreeView::renameFolderRequested, m_label, &LabelEditType::openEditor);
     layout->addWidget(m_label);
     layout->addSpacing(5);
-    m_contextButton = new PushButtonType(parent);
-    m_contextButton->setMaximumSize({ 33, 25 });
-    m_contextButton->setMinimumSize({ 33, 25 });
-    m_contextButton->setCursor(QCursor(Qt::PointingHandCursor));
-    m_contextButton->setFocusPolicy(Qt::TabFocus);
-    if (m_view->selectionModel()->isSelected(m_index)) {
-        m_contextButton->setStyleSheet(QStringLiteral(R"(QPushButton { )"
-                                                      R"(    border: none; )"
-                                                      R"(    padding: 0px; )"
-                                                      R"(    color: white; )"
-                                                      R"(})"
-                                                      R"(QPushButton:pressed { )"
-                                                      R"(    border: none; )"
-                                                      R"(    padding: 0px; )"
-                                                      R"(    color: rgb(210, 210, 210); )"
-                                                      R"(})"));
-    } else {
-        m_contextButton->setStyleSheet(QStringLiteral(R"(QPushButton { )"
-                                                      R"(    border: none; )"
-                                                      R"(    padding: 0px; )"
-                                                      R"(    color: rgb(68, 138, 201); )"
-                                                      R"(})"
-                                                      R"(QPushButton:pressed { )"
-                                                      R"(    border: none; )"
-                                                      R"(    padding: 0px; )"
-                                                      R"(    color: rgb(39, 85, 125); )"
-                                                      R"(})"));
-    }
-
-#ifdef __APPLE__
-    int pointSizeOffset = 0;
-#else
-    int pointSizeOffset = -4;
-#endif
-    m_contextButton->setFont(font_loader::loadFont("Font Awesome 6 Free Solid", "", 14 + pointSizeOffset));
-    m_contextButton->setText(u8"\uf141"); // fa-ellipsis-h
-
-    connect(m_contextButton, &QPushButton::clicked, m_view, [this](bool) {
-        auto *const treeView = static_cast<NodeTreeView *>(m_view);
-        //        tree_view->setCurrentIndexC(m_index);
-        treeView->onCustomContextMenu(treeView->visualRect(m_index).topLeft() + m_contextButton->geometry().bottomLeft());
-    });
-    layout->addWidget(m_contextButton, 0, Qt::AlignRight);
-    layout->addSpacing(5);
+    auto *tree = static_cast<NodeTreeView *>(m_view);
+    const auto addAction = [this, layout, tree](const QString &glyph, const QString &tip, NodeTreeView::RowAction action) {
+        auto *button = new PushButtonType(this);
+        button->setFixedSize(20, 25);
+        button->setFont(font_loader::loadFont("Font Awesome 6 Free Solid", "", 9));
+        button->setText(glyph);
+        button->setToolTip(tip);
+        button->setCursor(Qt::PointingHandCursor);
+        connect(button, &QPushButton::clicked, tree, [tree, index = m_index, action] { tree->triggerRowAction(index, action); });
+        layout->addWidget(button);
+        m_actions.append(button);
+    };
+    addAction(QString::fromUtf8(u8"\uf65e"), tr("Create subfolder"), NodeTreeView::RowAction::AddSubfolder);
+    addAction(QString::fromUtf8(u8"\uf303"), tr("Rename folder"), NodeTreeView::RowAction::Rename);
+    addAction(QString::fromUtf8(u8"\uf1f8"), tr("Delete folder"), NodeTreeView::RowAction::Delete);
+    m_count = new QLabel(this);
+    m_count->setFixedWidth(32);
+    m_count->setAlignment(Qt::AlignCenter);
+    layout->addWidget(m_count);
+    m_expandIcon->installEventFilter(this);
+    m_folderIcon->installEventFilter(this);
+    m_label->installEventFilter(this);
+    connect(m_folderIcon, &QPushButton::clicked, tree, [tree, index = m_index] { tree->triggerRowAction(index, NodeTreeView::RowAction::Select); });
     connect(m_view, &QTreeView::expanded, this, [this](const QModelIndex &) { update(); });
 }
 
@@ -165,6 +147,11 @@ void FolderTreeDelegateEditor::updateDelegate()
                         .arg(QString::number(m_folderIconColor.red()), QString::number(m_folderIconColor.green()), QString::number(m_folderIconColor.blue()));
     }
     m_label->setText(displayName);
+    m_count->setText(QString::number(m_index.data(NodeItem::ChildCount).toInt()));
+    const QString color = m_view->selectionModel()->isSelected(m_index) ? "white" : m_titleColor.name();
+    m_count->setStyleSheet("QLabel {color:" + color + ";}");
+    for (int i = 0; i < m_actions.size(); ++i)
+        m_actions[i]->setStyleSheet("QPushButton {border:0; padding:0; color:" + color + ";} QPushButton:hover {color:" + (i == 2 ? QString("#d34d4d") : QString("#448ac9")) + ";}");
     auto theme = static_cast<NodeTreeView *>(m_view)->theme();
 
     QColor chevronColor(theme == Theme::Dark ? QColor(169, 160, 172) : QColor(103, 99, 105));
@@ -242,4 +229,27 @@ void FolderTreeDelegateEditor::setTheme(Theme::Value theme)
         break;
     }
     }
+}
+
+void FolderTreeDelegateEditor::resizeEvent(QResizeEvent *event)
+{
+    for (auto *button : m_actions) button->setVisible(event->size().width() >= 150);
+    QWidget::resizeEvent(event);
+}
+
+bool FolderTreeDelegateEditor::eventFilter(QObject *watched, QEvent *event)
+{
+    auto *tree = static_cast<NodeTreeView *>(m_view);
+    if (event->type() == QEvent::MouseButtonPress) {
+        auto *mouse = static_cast<QMouseEvent *>(event);
+        if (mouse->button() == Qt::LeftButton && watched == m_expandIcon) {
+            if (m_index.data(NodeItem::IsExpandable).toBool()) tree->setExpanded(m_index, !tree->isExpanded(m_index));
+            return true;
+        }
+    }
+    if (watched == m_label && event->type() == QEvent::MouseButtonDblClick) {
+        tree->triggerRowAction(m_index, NodeTreeView::RowAction::Rename);
+        return true;
+    }
+    return QWidget::eventFilter(watched, event);
 }

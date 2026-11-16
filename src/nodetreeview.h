@@ -23,6 +23,9 @@ class NodeTreeView : public QTreeView
 public:
     explicit NodeTreeView(QWidget *parent = nullptr);
 
+    enum class RowAction { Select, AddSubfolder, Rename, Delete, Color };
+    void triggerRowAction(const QPersistentModelIndex &index, RowAction action);
+
     void setTreeSeparator(const QVector<QModelIndex> &newTreeSeparator, const QModelIndex &defaultNotesIndex);
     void setIsEditing(bool newIsEditing);
     void onRenameFolderFinished(const QString &newName);

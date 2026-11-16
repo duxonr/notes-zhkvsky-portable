@@ -3,7 +3,7 @@
 
 #include <QWidget>
 #include <QStyleOptionViewItem>
-#include <QModelIndex>
+#include <QPersistentModelIndex>
 #include <QFont>
 #include "editorsettingsoptions.h"
 
@@ -23,7 +23,7 @@ public:
 
 private:
     QStyleOptionViewItem m_option;
-    QModelIndex m_index;
+    QPersistentModelIndex m_index;
     QString m_displayFont;
     QFont m_titleFont;
     QColor m_titleColor;
@@ -38,12 +38,15 @@ private:
     QPixmap m_expanded;
     QPixmap m_notExpanded;
     QLabel *m_expandIcon;
-    PushButtonType *m_contextButton;
+    QList<PushButtonType *> m_actions;
+    QLabel *m_count;
     Theme::Value m_theme;
     void updateDelegate();
 
     // QWidget interface
 protected:
+    bool eventFilter(QObject *watched, QEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
     void paintEvent(QPaintEvent *event) override;
     void mouseDoubleClickEvent(QMouseEvent *event) override;
 };

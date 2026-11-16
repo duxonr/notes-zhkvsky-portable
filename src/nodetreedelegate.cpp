@@ -148,7 +148,7 @@ void NodeTreeDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opti
         auto displayName = index.data(NodeItem::Roles::DisplayText).toString();
         QRect nameRect(option.rect);
         nameRect.setLeft(iconRect.x() + iconRect.width() + 5);
-        nameRect.setWidth(nameRect.width() - 5 - 40);
+        nameRect.setRight(option.rect.right() - 45);
         if ((option.state & QStyle::State_Selected) == QStyle::State_Selected) {
             painter->setPen(m_titleSelectedColor);
         } else {
@@ -157,8 +157,8 @@ void NodeTreeDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opti
         painter->setFont(m_titleFont);
         painter->drawText(nameRect, Qt::AlignLeft | Qt::AlignVCenter, displayName);
         auto childCountRect = option.rect;
-        childCountRect.setLeft(nameRect.right() + 5);
-        childCountRect.setWidth(childCountRect.width() - 5);
+        childCountRect.setLeft(childCountRect.right() - 39);
+        childCountRect.setWidth(32);
         auto childCount = index.data(NodeItem::Roles::ChildCount).toInt();
         if ((option.state & QStyle::State_Selected) == QStyle::State_Selected) {
             painter->setPen(m_numberOfNotesSelectedColor);
@@ -184,7 +184,7 @@ void NodeTreeDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opti
         paintBackgroundSelectable(painter, option, index);
         auto iconRect = QRect(option.rect.x() + 10, option.rect.y() + ((option.rect.height() - 12) / 2), 12, 12);
         QString iconPath;
-        painter->setFont(font_loader::loadFont("Font Awesome 6 Free Solid", "", 10 + iconPointSizeOffset));
+        painter->setFont(font_loader::loadFont("Font Awesome 6 Free Solid", "", 12 + iconPointSizeOffset));
         if (m_theme == Theme::Dark) {
             painter->setPen(QColor(169, 160, 172));
             if ((option.state & QStyle::State_Open) == QStyle::State_Open) {
@@ -216,12 +216,14 @@ void NodeTreeDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opti
             painter->setPen(m_folderIconColor);
         }
         painter->setFont(font_loader::loadFont("Material Symbols Outlined", "", 16 + iconPointSizeOffset));
-        painter->drawText(folderIconRect, u8"\ue2c7"); // folder
+        painter->drawText(folderIconRect, index.parent().data(NodeItem::ItemType).toInt() == NodeItem::FolderItem ? QString::fromUtf8(u8"\ue2c8") : QString::fromUtf8(u8"\ue2c7")); // hierarchy
 
         QRect nameRect(option.rect);
         nameRect.setLeft(folderIconRect.x() + folderIconRect.width() + 5);
-        nameRect.setWidth(nameRect.width() - 5 - 40);
-        QFontMetrics fm(m_titleFont);
+        nameRect.setRight(option.rect.right() - 45);
+        QFont rowFont = m_titleFont;
+        rowFont.setWeight(index.parent().data(NodeItem::ItemType).toInt() == NodeItem::FolderItem ? QFont::Normal : QFont::DemiBold);
+        QFontMetrics fm(rowFont);
         auto displayName = index.data(NodeItem::Roles::DisplayText).toString();
         displayName = fm.elidedText(displayName, Qt::ElideRight, nameRect.width());
         if ((option.state & QStyle::State_Selected) == QStyle::State_Selected) {
@@ -229,11 +231,11 @@ void NodeTreeDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opti
         } else {
             painter->setPen(m_titleColor);
         }
-        painter->setFont(m_titleFont);
+        painter->setFont(rowFont);
         painter->drawText(nameRect, Qt::AlignLeft | Qt::AlignVCenter, displayName);
         auto childCountRect = option.rect;
-        childCountRect.setLeft(nameRect.right() + 5);
-        childCountRect.setWidth(childCountRect.width() - 5);
+        childCountRect.setLeft(childCountRect.right() - 39);
+        childCountRect.setWidth(32);
         auto childCount = index.data(NodeItem::Roles::ChildCount).toInt();
         if ((option.state & QStyle::State_Selected) == QStyle::State_Selected) {
             painter->setPen(m_numberOfNotesSelectedColor);
@@ -272,7 +274,7 @@ void NodeTreeDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opti
         painter->setPen(Qt::black);
         QRect nameRect(option.rect);
         nameRect.setLeft(iconRect.x() + iconRect.width() + 11);
-        nameRect.setWidth(nameRect.width() - 5 - 40);
+        nameRect.setRight(option.rect.right() - 45);
         auto displayName = index.data(NodeItem::Roles::DisplayText).toString();
         QFontMetrics fm(m_titleFont);
         displayName = fm.elidedText(displayName, Qt::ElideRight, nameRect.width());
@@ -284,8 +286,8 @@ void NodeTreeDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opti
         painter->setFont(m_titleFont);
         painter->drawText(nameRect, Qt::AlignLeft | Qt::AlignVCenter, displayName);
         auto childCountRect = option.rect;
-        childCountRect.setLeft(nameRect.right() + 5);
-        childCountRect.setWidth(childCountRect.width() - 5);
+        childCountRect.setLeft(childCountRect.right() - 39);
+        childCountRect.setWidth(32);
         auto childCount = index.data(NodeItem::Roles::ChildCount).toInt();
         if ((option.state & QStyle::State_Selected) == QStyle::State_Selected) {
             painter->setPen(m_numberOfNotesSelectedColor);

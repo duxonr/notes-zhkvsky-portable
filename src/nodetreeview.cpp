@@ -79,6 +79,24 @@ NodeTreeView::NodeTreeView(QWidget *parent)
     setSelectionMode(QAbstractItemView::SingleSelection);
 }
 
+void NodeTreeView::triggerRowAction(const QPersistentModelIndex &index, RowAction action)
+{
+    if (!index.isValid() || index.model() != model()) return;
+    const auto type = static_cast<NodeItem::Type>(index.data(NodeItem::ItemType).toInt());
+    const bool folder = type == NodeItem::FolderItem;
+    if (!folder && type != NodeItem::TagItem) return;
+    if (folder && index.data(NodeItem::NodeId).toInt() <= DEFAULT_NOTES_FOLDER_ID && action != RowAction::Select) return;
+    m_currentEditingIndex = index;
+    setCurrentIndexC(index);
+    switch (action) {
+    case RowAction::Select: break;
+    case RowAction::AddSubfolder: if (folder) m_addSubfolderAction->trigger(); break;
+    case RowAction::Rename: (folder ? m_renameFolderAction : m_renameTagAction)->trigger(); break;
+    case RowAction::Delete: (folder ? m_deleteFolderAction : m_deleteTagAction)->trigger(); break;
+    case RowAction::Color: if (!folder) m_changeTagColorAction->trigger(); break;
+    }
+}
+
 void NodeTreeView::onDeleteNodeAction()
 {
     auto itemType = static_cast<NodeItem::Type>(m_currentEditingIndex.data(NodeItem::Roles::ItemType).toInt());

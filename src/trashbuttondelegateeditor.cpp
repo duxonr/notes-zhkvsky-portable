@@ -82,7 +82,7 @@ void TrashButtonDelegateEditor::paintEvent(QPaintEvent *event)
     painter.drawText(nameRect, Qt::AlignLeft | Qt::AlignVCenter, displayName);
     auto childCountRect = rect();
     childCountRect.setLeft(nameRect.right() + 22);
-    childCountRect.setWidth(childCountRect.width() - 5);
+    childCountRect.setWidth(32);
     auto childCount = m_index.data(NodeItem::Roles::ChildCount).toInt();
     if (m_view->selectionModel()->isSelected(m_index)) {
         painter.setPen(m_numberOfNotesSelectedColor);
