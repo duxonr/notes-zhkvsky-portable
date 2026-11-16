@@ -516,7 +516,7 @@ elseif(UNIX)
 elseif(WIN32)
   target_compile_definitions(${PROJECT_NAME} PUBLIC QXT_STATIC)
 
-  target_link_libraries(${PROJECT_NAME} PUBLIC user32)
+  target_link_libraries(${PROJECT_NAME} PUBLIC user32 dwmapi)
 endif()
 
 install(

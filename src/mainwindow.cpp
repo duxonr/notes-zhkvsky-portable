@@ -31,6 +31,11 @@
 #include <QSqlDatabase>
 #include <QSqlQuery>
 
+#ifdef Q_OS_WIN
+#include <qt_windows.h>
+#include <dwmapi.h>
+#endif
+
 #define DEFAULT_DATABASE_NAME "default_database"
 
 /*!
@@ -2299,6 +2304,18 @@ void MainWindow::changeEditorTextWidthFromStyleButtons(EditorTextWidth::Value ed
 void MainWindow::setTheme(Theme::Value theme)
 {
     m_currentTheme = theme;
+#ifdef Q_OS_WIN
+    QTimer::singleShot(0, this, [this] {
+        const HWND hwnd = reinterpret_cast<HWND>(winId());
+        const BOOL dark = m_currentTheme == Theme::Dark;
+        DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark, sizeof(dark));
+        const COLORREF background = m_currentTheme == Theme::Dark ? RGB(25,25,25)
+            : m_currentTheme == Theme::Sepia ? RGB(251,240,217) : RGB(247,247,247);
+        const COLORREF foreground = dark ? RGB(212,212,212) : RGB(26,26,26);
+        DwmSetWindowAttribute(hwnd, DWMWA_CAPTION_COLOR, &background, sizeof(background));
+        DwmSetWindowAttribute(hwnd, DWMWA_TEXT_COLOR, &foreground, sizeof(foreground));
+    });
+#endif
 
     setCSSThemeAndUpdate(this, theme);
     setCSSThemeAndUpdate(m_ui->verticalSpacer_upSearchEdit, theme);
