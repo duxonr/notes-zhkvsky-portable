@@ -535,6 +535,12 @@ void NodeTreeView::mousePressEvent(QMouseEvent *event)
                 break;
             }
             case NodeItem::Type::TagItem: {
+                if (!(event->modifiers() & (Qt::ControlModifier | Qt::ShiftModifier))) {
+                    m_needReleaseIndex = QModelIndex();
+                    selectionModel()->setCurrentIndex(index, QItemSelectionModel::NoUpdate);
+                    selectionModel()->select(index, QItemSelectionModel::ClearAndSelect);
+                    break;
+                }
                 auto oldIndexes = selectionModel()->selectedIndexes();
                 for (const auto &ix : std::as_const(oldIndexes)) {
                     auto selectedItemType = static_cast<NodeItem::Type>(ix.data(NodeItem::Roles::ItemType).toInt());
