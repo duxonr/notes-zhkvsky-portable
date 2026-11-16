@@ -1537,6 +1537,7 @@ void MainWindow::setupDatabases()
 #endif
 
     m_settingsDatabase->setFallbacksEnabled(false);
+    m_ui->treeView->setFolderColorSettings(m_settingsDatabase);
     bool needMigrateFromV1_5_0 = false;
     if (m_settingsDatabase->value(QStringLiteral("version"), "NULL") == "NULL") {
         needMigrateFromV1_5_0 = true;

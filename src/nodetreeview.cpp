@@ -8,6 +8,10 @@
 #include <QApplication>
 #include <QFile>
 #include <QScrollBar>
+#include <QSettings>
+#include <QColorDialog>
+#include <QPushButton>
+#include <QLayout>
 #include "nodetreeview_p.h"
 
 NodeTreeView::NodeTreeView(QWidget *parent)
@@ -77,6 +81,51 @@ NodeTreeView::NodeTreeView(QWidget *parent)
     setDragEnabled(true);
     setAcceptDrops(true);
     setSelectionMode(QAbstractItemView::SingleSelection);
+}
+
+void NodeTreeView::setFolderColorSettings(QSettings *settings)
+{
+    m_folderColorSettings = settings;
+    m_folderIconColors.clear();
+    settings->beginGroup("folderIconColors");
+    for (const QString &key : settings->childKeys()) {
+        bool ok = false;
+        int id = key.toInt(&ok);
+        QColor color(settings->value(key).toString());
+        if (ok && color.isValid()) m_folderIconColors.insert(id, color);
+    }
+    settings->endGroup();
+}
+
+QColor NodeTreeView::folderIconColor(const QModelIndex &index) const
+{
+    return m_folderIconColors.value(index.data(NodeItem::NodeId).toInt());
+}
+
+void NodeTreeView::changeFolderIconColor(const QPersistentModelIndex &index)
+{
+    if (!index.isValid() || index.data(NodeItem::ItemType).toInt() != NodeItem::FolderItem || !m_folderColorSettings) return;
+    const int id = index.data(NodeItem::NodeId).toInt();
+    QColorDialog dialog(folderIconColor(index).isValid() ? folderIconColor(index) : QColor(68, 138, 201), this);
+    dialog.setOption(QColorDialog::DontUseNativeDialog);
+    dialog.setWindowTitle(tr("Folder icon color"));
+    auto *reset = new QPushButton(tr("Use theme color"), &dialog);
+    dialog.layout()->addWidget(reset);
+    bool useThemeColor = false;
+    connect(reset, &QPushButton::clicked, &dialog, [&] { useThemeColor = true; dialog.accept(); });
+    if (dialog.exec() != QDialog::Accepted || !index.isValid()) return;
+    const QString key = "folderIconColors/" + QString::number(id);
+    if (useThemeColor) {
+        m_folderIconColors.remove(id);
+        m_folderColorSettings->remove(key);
+    } else {
+        const QColor color = dialog.selectedColor();
+        if (!color.isValid()) return;
+        m_folderIconColors.insert(id, color);
+        m_folderColorSettings->setValue(key, color.name(QColor::HexRgb));
+    }
+    m_folderColorSettings->sync();
+    viewport()->update();
 }
 
 void NodeTreeView::triggerRowAction(const QPersistentModelIndex &index, RowAction action)
@@ -616,7 +665,15 @@ void NodeTreeView::mouseReleaseEvent(QMouseEvent *event)
 
 void NodeTreeView::mouseDoubleClickEvent(QMouseEvent *event)
 {
-    Q_UNUSED(event);
+    const auto index = QPersistentModelIndex(indexAt(event->position().toPoint()));
+    if (event->button() == Qt::LeftButton && index.isValid()) {
+        const QRect row = visualRect(index);
+        const QRect icon(row.x() + 24, row.y(), 20, row.height());
+        if (index.data(NodeItem::ItemType).toInt() == NodeItem::FolderItem && icon.contains(event->position().toPoint()))
+            changeFolderIconColor(index);
+        else if (event->position().x() >= row.x() + 49 && event->position().x() < row.right() - 40)
+            triggerRowAction(index, RowAction::Rename);
+    }
     Q_D(NodeTreeView);
     d->pressedIndex = QModelIndex();
     m_needReleaseIndex = QModelIndex();

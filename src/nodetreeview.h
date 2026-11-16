@@ -3,6 +3,9 @@
 
 #include <QTreeView>
 #include <QTimer>
+#include <QColor>
+#include <QHash>
+class QSettings;
 #include "nodedata.h"
 #include "editorsettingsoptions.h"
 
@@ -23,6 +26,9 @@ class NodeTreeView : public QTreeView
 public:
     explicit NodeTreeView(QWidget *parent = nullptr);
 
+    void setFolderColorSettings(QSettings *settings);
+    QColor folderIconColor(const QModelIndex &index) const;
+    void changeFolderIconColor(const QPersistentModelIndex &index);
     enum class RowAction { Select, AddSubfolder, Rename, Delete, Color };
     void triggerRowAction(const QPersistentModelIndex &index, RowAction action);
 
@@ -73,6 +79,8 @@ private slots:
     void onCollapsed(const QModelIndex &index);
 
 private:
+    QSettings *m_folderColorSettings = nullptr;
+    QHash<int, QColor> m_folderIconColors;
     QMenu *m_contextMenu;
     QAction *m_renameFolderAction;
     QAction *m_deleteFolderAction;

@@ -146,6 +146,9 @@ void FolderTreeDelegateEditor::updateDelegate()
                 QStringLiteral("QPushButton{border: none; padding: 0px; color: rgb(%1, %2, %3);}")
                         .arg(QString::number(m_folderIconColor.red()), QString::number(m_folderIconColor.green()), QString::number(m_folderIconColor.blue()));
     }
+    const QColor customIconColor = static_cast<NodeTreeView *>(m_view)->folderIconColor(m_index);
+    if (customIconColor.isValid())
+        folderIconStyle = "QPushButton {border:0; padding:0; color:" + customIconColor.name() + ";}";
     m_label->setText(displayName);
     m_count->setText(QString::number(m_index.data(NodeItem::ChildCount).toInt()));
     const QString color = m_view->selectionModel()->isSelected(m_index) ? "white" : m_titleColor.name();
@@ -246,6 +249,10 @@ bool FolderTreeDelegateEditor::eventFilter(QObject *watched, QEvent *event)
             if (m_index.data(NodeItem::IsExpandable).toBool()) tree->setExpanded(m_index, !tree->isExpanded(m_index));
             return true;
         }
+    }
+    if (watched == m_folderIcon && event->type() == QEvent::MouseButtonDblClick) {
+        tree->changeFolderIconColor(m_index);
+        return true;
     }
     if (watched == m_label && event->type() == QEvent::MouseButtonDblClick) {
         tree->triggerRowAction(m_index, NodeTreeView::RowAction::Rename);

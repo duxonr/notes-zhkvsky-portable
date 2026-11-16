@@ -215,6 +215,8 @@ void NodeTreeDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opti
         } else {
             painter->setPen(m_folderIconColor);
         }
+        const QColor customIconColor = static_cast<NodeTreeView *>(m_view)->folderIconColor(index);
+        if (customIconColor.isValid()) painter->setPen(customIconColor);
         painter->setFont(font_loader::loadFont("Material Symbols Outlined", "", 16 + iconPointSizeOffset));
         painter->drawText(folderIconRect, index.parent().data(NodeItem::ItemType).toInt() == NodeItem::FolderItem ? QString::fromUtf8(u8"\ue2c8") : QString::fromUtf8(u8"\ue2c7")); // hierarchy
 
