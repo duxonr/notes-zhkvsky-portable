@@ -1,3 +1,5 @@
+#include <QToolButton>
+#include <QHBoxLayout>
 /**************************************************************************************
  * We believe in the power of notes to help us record ideas and thoughts.
  * We want people to have an easy, beautiful and simple way of doing that.
@@ -1674,6 +1676,63 @@ void MainWindow::setupModelView()
 #endif
     m_ui->verticalLayout_textEdit->insertWidget(titlePosition, noteTitle);
     m_noteEditorLogic->setTitleEditor(noteTitle);
+    auto *formatBar=new QWidget(m_ui->frameRight);formatBar->setObjectName("noteFormattingBar");
+    auto *formatLayout=new QHBoxLayout(formatBar);formatLayout->setContentsMargins(20,0,20,4);formatLayout->setSpacing(3);
+    const auto editable=[this]{const bool ready=!m_textEdit->isReadOnly() && m_noteEditorLogic->currentEditingNoteId()!=INVALID_NODE_ID && !m_textEdit->textCursor().selectedText().contains(QChar::ObjectReplacementCharacter) && !m_textEdit->textCursor().block().text().contains(QChar::ObjectReplacementCharacter);return ready;};
+    const auto prefixBlocks=[this,editable](const QString &prefix){
+        if(!editable())return;auto selection=m_textEdit->textCursor();int first=selection.selectionStart(),last=selection.selectionEnd();auto start=m_textEdit->document()->findBlock(first);auto finish=m_textEdit->document()->findBlock(last);if(last>first&&last==finish.position())finish=finish.previous();
+        selection.beginEditBlock();
+        if(prefix=="> "){
+            QStringList lines;for(auto block=start;block.isValid();block=block.next()){lines << "> "+block.text();if(block==finish)break;}
+            const bool separate=start.previous().isValid()&&!start.previous().text().isEmpty();
+            QTextCursor replacement(start);replacement.setPosition(finish.position()+finish.length()-1,QTextCursor::KeepAnchor);
+            replacement.insertText((separate?"\n":QString())+"> [!NOTE]\n"+lines.join('\n')+"\n");
+            replacement.movePosition(QTextCursor::PreviousBlock);replacement.movePosition(QTextCursor::EndOfBlock);m_textEdit->setTextCursor(replacement);
+        }else{
+            for(auto block=start;block.isValid();block=block.next()){QTextCursor line(block);const int quote=block.text().startsWith("> ")?2:0;line.setPosition(block.position()+quote);if(block.text().mid(quote).startsWith(prefix)){line.movePosition(QTextCursor::NextCharacter,QTextCursor::KeepAnchor,prefix.size());line.removeSelectedText();}else line.insertText(prefix);if(block==finish)break;}
+        }
+        selection.endEditBlock();m_textEdit->setFocus();
+    };
+    const auto button=[this,formatBar,formatLayout](const QString &label,const QString &name,const QString &tip,std::function<void()> action,bool bold=false,bool italic=false){
+        auto *tool=new QToolButton(formatBar);tool->setObjectName(name);tool->setText(label);tool->setToolTip(tip);tool->setAccessibleName(tip);tool->setCursor(Qt::PointingHandCursor);tool->setFocusPolicy(Qt::NoFocus);tool->setFixedSize(30,28);auto font=tool->font();font.setBold(bold);font.setItalic(italic);tool->setFont(font);formatLayout->addWidget(tool);connect(tool,&QToolButton::clicked,this,std::move(action));
+    };
+    button("H", "formatHeading",tr("Заголовок"),[this,editable]{
+        if(!editable())return;auto c=m_textEdit->textCursor();const auto block=c.block();const int quote=block.text().startsWith("> ")?2:0;
+        if(!quote){setHeading(block.text().startsWith("## ")?0:2);return;}
+        c.beginEditBlock();c.setPosition(block.position()+quote);if(block.text().mid(quote).startsWith("## ")){c.movePosition(QTextCursor::NextCharacter,QTextCursor::KeepAnchor,3);c.removeSelectedText();}else c.insertText("## ");c.endEditBlock();m_textEdit->setTextCursor(c);m_textEdit->setFocus();
+    },true);
+    button("B", "formatBold",tr("Жирный"),[this,editable]{if(editable())makeBold();},true);
+    button("I", "formatItalic",tr("Курсив"),[this,editable]{if(editable())makeItalic();},false,true);
+    button("U", "formatUnderline",tr("Подчёркивание"),[this,editable]{if(!editable())return;auto c=m_textEdit->textCursor();if(!c.hasSelection())c.select(QTextCursor::WordUnderCursor);const auto text=c.selectedText();c.beginEditBlock();c.insertText("<u>"+text+"</u>");if(text.isEmpty())c.movePosition(QTextCursor::PreviousCharacter,QTextCursor::MoveAnchor,4);c.endEditBlock();m_textEdit->setTextCursor(c);m_textEdit->setFocus();});
+    button(QString::fromUtf8("•"),"formatList",tr("Маркированный список с отступом"),[prefixBlocks]{prefixBlocks("  - ");});
+    button(QString::fromUtf8("▣"),"formatCallout",tr("Callout — блок с рамкой"),[prefixBlocks]{prefixBlocks("> ");});
+    button(QString::fromUtf8("T×"),"formatReset",tr("Сбросить форматирование"),[this,editable]{
+        if(!editable())return;auto c=m_textEdit->textCursor();const bool keepCallout=!c.hasSelection()&&c.block().text().startsWith("> ")&&!c.block().text().startsWith("> [!NOTE]");if(!c.hasSelection()){c.movePosition(QTextCursor::StartOfBlock);c.movePosition(QTextCursor::EndOfBlock,QTextCursor::KeepAnchor);}
+        QString text=c.selectedText();text.replace(QChar::ParagraphSeparator,'\n');
+        text.remove(QRegularExpression(R"((?m)^> \[!NOTE\]\n?)"));
+        text.replace(QRegularExpression(R"((?m)^> ?)"),"");
+        text.replace(QRegularExpression(R"((?m)^\s*#{1,6}\s+)"),"");
+        text.replace(QRegularExpression(R"((?m)^\s*[-+*]\s+)"),"");
+        text.replace(QRegularExpression(R"(\*\*([^*\n]+)\*\*)"),"\\1");
+        text.replace(QRegularExpression(R"((?<!\*)\*([^*\n]+)\*(?!\*))"),"\\1");
+        text.remove(QRegularExpression("</?u>"));
+        if(keepCallout)text.prepend("> ");
+        c.beginEditBlock();c.insertText(text,QTextCharFormat());c.endEditBlock();m_textEdit->setTextCursor(c);m_textEdit->setFocus();
+    });
+    // Draw large, theme-neutral symbols at the same size as the other toolbar controls.
+    for(const auto &name:{"formatHeading","formatBold","formatItalic","formatUnderline","formatList","formatCallout","formatReset"}){
+        auto *tool=formatBar->findChild<QToolButton*>(name);const auto label=tool->text();tool->setText({});tool->setIconSize(QSize(22,22));
+        QPixmap symbol(44,44);symbol.fill(Qt::transparent);QPainter painter(&symbol);painter.scale(2,2);painter.setRenderHint(QPainter::Antialiasing);
+        const QColor ink("#448ac9");painter.setPen(QPen(ink,1.6,Qt::SolidLine,Qt::RoundCap,Qt::RoundJoin));
+        if(QString::fromLatin1(name)=="formatList"){for(int y:{5,11,17}){painter.setBrush(ink);painter.drawEllipse(QPointF(4,y),2,2);painter.drawLine(QPointF(9,y),QPointF(19,y));}}
+        else if(QString::fromLatin1(name)=="formatCallout"){painter.setBrush(Qt::NoBrush);painter.drawRoundedRect(QRectF(2,3,18,16),2,2);painter.drawLine(6,8,16,8);painter.drawLine(6,12,16,12);painter.drawLine(6,16,12,16);}
+        else {auto font=tool->font();font.setPointSize(QString::fromLatin1(name)=="formatReset"?11:14);font.setUnderline(QString::fromLatin1(name)=="formatUnderline");painter.setFont(font);painter.drawText(QRectF(0,0,22,22),Qt::AlignCenter,label);}
+        painter.end();tool->setIcon(QIcon(symbol));
+    }
+    formatLayout->addStretch();m_ui->verticalLayout_textEdit->insertWidget(titlePosition+1,formatBar);
+    connect(m_noteEditorLogic,&NoteEditorLogic::textShown,formatBar,[this,formatBar]{formatBar->setVisible(!m_textEdit->isReadOnly());});
+    connect(m_noteEditorLogic,&NoteEditorLogic::kanbanShown,formatBar,&QWidget::hide);
+
     noteTitle->hide();
     m_editorSettingsQuickView.rootContext()->setContextProperty("noteEditorLogic", m_noteEditorLogic);
 }
@@ -1773,8 +1832,8 @@ void MainWindow::restoreStates()
             m_textEdit->setLineWrapMode(QTextEdit::FixedColumnWidth);
         }
     } else {
-        // Default option, Focus Mode (FixedColumnWidth) or Full Width (WidgetWidth)
-        m_textEdit->setLineWrapMode(QTextEdit::FixedColumnWidth);
+        // Default: full width, Focus Mode off.
+        m_textEdit->setLineWrapMode(QTextEdit::WidgetWidth);
     }
 
     if (m_settingsDatabase->value(QStringLiteral("charsLimitPerFontMono"), "NULL") != "NULL")
@@ -2376,6 +2435,7 @@ void MainWindow::setTheme(Theme::Value theme)
             QStringLiteral(" QLineEdit#noteTitleEdit { color: %1; placeholder-text-color: %2; selection-color: white; selection-background-color: #448ac9; }")
                 .arg(m_currentEditorTextColor.name(), placeholder.name()));
     }
+    if(auto *bar=findChild<QWidget*>("noteFormattingBar")){const QString ink=m_currentEditorTextColor.name();bar->setStyleSheet(QString("QToolButton{color:%1;background:transparent;border:none;border-radius:4px;}QToolButton:hover{background:rgba(68,138,201,35);}QToolButton:pressed{background:rgba(68,138,201,65);}").arg(ink));}
     setCSSThemeAndUpdate(m_textEdit->verticalScrollBar(), theme);
 #if !defined(Q_OS_MACOS)
     if (m_editorSettingsWidget) {
@@ -3888,6 +3948,7 @@ bool MainWindow::eventFilter(QObject *object, QEvent *event)
         break;
     case QEvent::KeyPress: {
         auto *keyEvent = static_cast<QKeyEvent *>(event);
+        if(object==m_textEdit && (keyEvent->key()==Qt::Key_Return||keyEvent->key()==Qt::Key_Enter) && keyEvent->modifiers()==Qt::ControlModifier && m_textEdit->textCursor().block().text().startsWith("> "))return false;
         if (keyEvent->key() == Qt::Key_Return && m_searchEdit->text().isEmpty()) {
             setFocusOnText();
         } else if (keyEvent->key() == Qt::Key_Return && keyEvent->modifiers().testFlag(Qt::ControlModifier)) {

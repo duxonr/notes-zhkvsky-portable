@@ -105,12 +105,12 @@ void NoteEditorLogic::setTitleEditor(QLineEdit *title)
 
 bool NoteEditorLogic::markdownEnabled() const
 {
-    return m_highlighter->document() != nullptr;
+    return m_highlighter->markdownEnabled();
 }
 
 void NoteEditorLogic::setMarkdownEnabled(bool enabled)
 {
-    m_highlighter->setDocument(enabled ? m_textEdit->document() : nullptr);
+    m_highlighter->setMarkdownEnabled(enabled);
 }
 
 void NoteEditorLogic::showNotesInEditor(const QVector<NodeData> &notes)
@@ -793,7 +793,7 @@ QString NoteEditorLogic::getNthLine(const QString &str, int targetLineNumber)
                 QString line = str.mid(previousLineBreakIndex + 1, i - previousLineBreakIndex - 1);
                 if (line.contains("[!notes-screenshot:v1:")) line = ScreenshotBlocks::withoutCards(line);
                 line = line.trimmed();
-                if (!line.isEmpty() && !line.startsWith("---") && !line.startsWith("```")) {
+                if (!line.isEmpty() && !line.startsWith("---") && !line.startsWith("```") && line != "> [!NOTE]") {
                     QTextDocument doc;
                     doc.setMarkdown(line);
                     QString text = doc.toPlainText();

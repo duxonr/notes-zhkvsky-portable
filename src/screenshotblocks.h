@@ -53,8 +53,9 @@ public:
     void removeCard(QTextCursor);
     void editCard(QTextCursor, bool description);
     void editDescriptionInline(QTextCursor);
-    void moveCard(QTextCursor, int destination);
+    void moveCard(QTextCursor, int destination, bool intoCallout = false);
     static QString displayTitle(const QJsonObject &);
+    bool revealImage(const QTextCursor &);
     void copyImage(const QTextCursor &);
     void copyDescription(const QTextCursor &);
     bool descriptionOverflows(const QString &, qreal width) const;
@@ -90,6 +91,7 @@ private:
     QPoint m_dragStart;
     QPointer<QLabel> m_dropLine;
     int m_dropPosition = -1;
+    bool m_dropInCallout = false;
     QTextCursor m_editCursor;
     QColor m_foreground{26,26,26};
     Theme::Value m_theme = Theme::Light;

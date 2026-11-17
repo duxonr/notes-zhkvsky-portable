@@ -37,12 +37,14 @@ protected:
     QMimeData *createMimeDataFromSelection() const override;
     void contextMenuEvent(QContextMenuEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
+    void paintEvent(QPaintEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
 
     QStringList _ignoredClickUrlSchemata;
 private:
     ScreenshotBlocks *m_screenshots;
+    QWidget *m_calloutFrames=nullptr;
     void prepareTextInsertion();
 };
 

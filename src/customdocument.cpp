@@ -7,10 +7,44 @@
 #include <QMimeData>
 #include <QMenu>
 #include <QClipboard>
+#include <QScrollBar>
+
+namespace {
+// A mouse-transparent overlay can draw the frame in the editor padding. The
+// wrapped text keeps its normal layout and Undo history is untouched.
+class CalloutFrames final : public QWidget {
+public:
+    explicit CalloutFrames(CustomDocument *editor):QWidget(editor),m_editor(editor){
+        setAttribute(Qt::WA_TransparentForMouseEvents);setAttribute(Qt::WA_TranslucentBackground);
+    }
+protected:
+    void paintEvent(QPaintEvent *) override {
+        QPainter painter(this);painter.setRenderHint(QPainter::Antialiasing);painter.setBrush(Qt::NoBrush);painter.setPen(QPen(QColor(128,128,128,150),1));
+        const auto viewport=m_editor->viewport()->geometry();auto block=m_editor->cursorForPosition(QPoint(0,0)).block();
+        while(block.previous().isValid()&&block.text().startsWith('>'))block=block.previous();
+        for(;block.isValid();block=block.next()){
+            const int top=m_editor->cursorRect(QTextCursor(block)).top();if(top>viewport.height())break;
+            if(!block.text().startsWith("> [!NOTE]"))continue;auto end=block;while(end.next().isValid()&&end.next().text().startsWith('>'))end=end.next();
+            auto last=QTextCursor(end);last.movePosition(QTextCursor::EndOfBlock);const int bottom=m_editor->cursorRect(last).bottom();
+            const qreal left=qMax(1.0,viewport.left()+m_editor->document()->documentMargin()-16);
+            const qreal right=qMin(qreal(width()-1),viewport.left()+m_editor->document()->textWidth()-m_editor->document()->documentMargin()+16);
+            qreal frameBottom=bottom+9;
+            if(end.next().isValid()&&!end.next().text().isEmpty())frameBottom=qMin(frameBottom,qreal(m_editor->cursorRect(QTextCursor(end.next())).top()+1));
+            if(bottom>=0)painter.drawRoundedRect(QRectF(left,viewport.top()+top+4,qMax(20.0,right-left),qMax(4.0,frameBottom-top-4)),4,4);
+            block=end;
+        }
+    }
+private:
+    CustomDocument *m_editor;
+};
+}
 
 CustomDocument::CustomDocument(QWidget *parent) : QTextEdit(parent)
 {
     m_screenshots = new ScreenshotBlocks(this);
+    m_calloutFrames=new CalloutFrames(this);m_calloutFrames->setObjectName("calloutFrames");m_calloutFrames->setGeometry(rect());m_calloutFrames->show();m_calloutFrames->raise();
+    connect(document(),&QTextDocument::contentsChanged,m_calloutFrames,QOverload<>::of(&QWidget::update));
+    connect(verticalScrollBar(),&QScrollBar::valueChanged,m_calloutFrames,QOverload<>::of(&QWidget::update));
     installEventFilter(this);
     viewport()->installEventFilter(this);
     setMouseTracking(true);
@@ -31,11 +65,13 @@ CustomDocument::CustomDocument(QWidget *parent) : QTextEdit(parent)
 void CustomDocument::setDocumentPadding(int left, int top, int right, int bottom)
 {
     setViewportMargins(left, top, right, bottom);
+    if(m_calloutFrames)m_calloutFrames->update();
 }
 
 void CustomDocument::resizeEvent(QResizeEvent *event)
 {
     QTextEdit::resizeEvent(event);
+    if(m_calloutFrames){m_calloutFrames->setGeometry(rect());m_calloutFrames->raise();m_calloutFrames->update();}
     emit resized();
 }
 
@@ -47,6 +83,7 @@ void CustomDocument::mouseMoveEvent(QMouseEvent *event)
 
 bool CustomDocument::eventFilter(QObject *obj, QEvent *event)
 {
+    if(event->type()==QEvent::ShortcutOverride){auto *key=static_cast<QKeyEvent*>(event);if((key->key()==Qt::Key_Return||key->key()==Qt::Key_Enter)&&key->modifiers()==Qt::ControlModifier&&textCursor().block().text().startsWith("> ")){event->accept();return true;}}
     if(event->type()==QEvent::KeyPress&&static_cast<QKeyEvent*>(event)->key()==Qt::Key_Escape&&m_screenshots->cancelDrag())return true;
     if (obj == viewport() && (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseButtonRelease || event->type() == QEvent::MouseMove)) {
         if (m_screenshots->handleMouse(static_cast<QMouseEvent *>(event))) {
@@ -202,6 +239,25 @@ void CustomDocument::keyPressEvent(QKeyEvent *event)
         }
         if(event->key()==Qt::Key_Delete && c.atBlockEnd() && c.block().next().text()==QString(QChar::ObjectReplacementCharacter)){
             QTextCursor object(c.block().next());object.movePosition(QTextCursor::NextCharacter,QTextCursor::KeepAnchor);m_screenshots->removeCard(object);return;
+        }
+    }
+    if(!isReadOnly() && !c.hasSelection()
+       && (event->key()==Qt::Key_Return || event->key()==Qt::Key_Enter)){
+        const bool quoted=c.block().text().startsWith("> ");
+        const bool control=event->modifiers()==Qt::ControlModifier;
+        const bool plain=event->modifiers()==Qt::NoModifier;
+        if(quoted && plain){
+            c.beginEditBlock();c.insertBlock(QTextBlockFormat(),QTextCharFormat());c.insertBlock(QTextBlockFormat(),QTextCharFormat());c.endEditBlock();setTextCursor(c);return;
+        }
+        if((quoted&&control)||(!quoted&&plain)){
+            const auto item=QRegularExpression(R"(^((?:> )?\s*[-+*]\s+)(.*)$)").match(c.block().text());
+            if(item.hasMatch()&&c.positionInBlock()>=item.capturedLength(1)){
+                c.beginEditBlock();
+                if(item.captured(2).trimmed().isEmpty()){c.movePosition(QTextCursor::StartOfBlock);c.movePosition(QTextCursor::EndOfBlock,QTextCursor::KeepAnchor);c.removeSelectedText();if(quoted)c.insertText("> ");}
+                else {c.insertBlock(QTextBlockFormat(),QTextCharFormat());c.insertText(item.captured(1),QTextCharFormat());}
+                c.endEditBlock();setTextCursor(c);return;
+            }
+            if(quoted){c.beginEditBlock();c.insertBlock(QTextBlockFormat(),QTextCharFormat());c.insertText("> ",QTextCharFormat());c.endEditBlock();setTextCursor(c);return;}
         }
     }
     if(!event->text().isEmpty() && event->text()[0].isPrint() && !(event->modifiers()&(Qt::ControlModifier|Qt::AltModifier)))prepareTextInsertion();
@@ -472,4 +528,20 @@ void CustomDocument::moveBlockDown()
     cursor.setPosition(startPosition + currentHorizontalPosition);
 
     setTextCursor(cursor);
+}
+
+void CustomDocument::paintEvent(QPaintEvent *event) {
+    QTextEdit::paintEvent(event);QPainter painter(viewport());painter.setRenderHint(QPainter::Antialiasing);painter.setBrush(Qt::NoBrush);painter.setPen(QPen(QColor(128,128,128,150),1));
+    // Paint real list dots over the hidden source marker, retaining its indentation.
+    for(auto block=cursorForPosition(QPoint(0,0)).block();block.isValid();block=block.next()){
+        const auto item=QRegularExpression(R"(^((?:> )?\s*)[-+*]\s+(?!\[[ xX]\]))").match(block.text());
+        QTextCursor marker(block);if(cursorRect(marker).top()>viewport()->height())break;
+        if(!item.hasMatch())continue;const int index=item.capturedLength(1);bool hidden=false;
+        for(const auto &range:block.layout()->formats())if(index>=range.start&&index<range.start+range.length&&range.format.foreground().color().alpha()==0)hidden=true;
+        if(!hidden)continue;marker.setPosition(block.position()+index);const auto left=cursorRect(marker);
+        painter.save();painter.setPen(Qt::NoPen);painter.setBrush(palette().color(QPalette::Base).lightness()<128?QColor("#eeeeee"):palette().color(QPalette::Text));
+        const QFontMetricsF metrics(document()->defaultFont());const qreal centerY=left.top()+metrics.ascent()-metrics.xHeight()/2.0;
+        painter.drawEllipse(QPointF(left.left()+4,centerY),3.25,3.25);painter.restore();
+    }
+
 }

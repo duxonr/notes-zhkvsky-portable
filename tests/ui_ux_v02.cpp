@@ -336,10 +336,10 @@ int main(int argc, char **argv) {
  text->setFocus();text->append("Body extension");QTest::qWait(300);
  check(listModel->getNote(listModel->getNoteIndex(titleId)).fullTitle()=="Manual heading","manual heading survives body editing");
  tree->setCurrentIndexC(model->getDefaultNotesIndex());QTest::qWait(300);tree->setCurrentIndexC(model->getAllNotesButtonIndex());QTest::qWait(300);
- list->setCurrentIndexC(listModel->getNoteIndex(titleId));QTest::qWait(200);
+ for(int retry=0;retry<5;++retry){auto selected=listModel->getNoteIndex(titleId);list->setCurrentIndexC(selected);emit list->notePressed({selected});QTest::qWait(200);if(window->findChild<NoteEditorLogic*>()->currentEditingNoteId()==titleId)break;}
  check(heading->text()=="Manual heading","manual heading restored from database reload");
  heading->setFocus();heading->selectAll();QTest::keyClick(heading,Qt::Key_Backspace);QTest::qWait(250);
- check(!listModel->getNote(listModel->getNoteIndex(titleId)).hasManualTitle() && listModel->getNote(listModel->getNoteIndex(titleId)).fullTitle().contains("UI test 2"),"clearing heading restores automatic title");
+ out<<"CLEARED_TITLE="<<listModel->getNote(listModel->getNoteIndex(titleId)).fullTitle()<<" MANUAL="<<listModel->getNote(listModel->getNoteIndex(titleId)).hasManualTitle()<<" EDITING="<<window->findChild<NoteEditorLogic*>()->currentEditingNoteId()<<" EXPECTED="<<titleId<<"\n";check(!listModel->getNote(listModel->getNoteIndex(titleId)).hasManualTitle() && listModel->getNote(listModel->getNoteIndex(titleId)).fullTitle().contains("UI test 2"),"clearing heading restores automatic title");
  heading->setFocus();QTest::keyClicks(heading,"Persistent heading");QTest::qWait(250);text->setFocus();
  window->findChild<QPushButton*>("switchToKanbanViewButton")->click();QTest::qWait(300);
  QObject *kanban=nullptr;for(auto *quick:window->findChildren<QQuickWidget*>())if(quick->rootObject() && quick->rootObject()->property("isProVersion").isValid())kanban=quick->rootObject();
@@ -392,7 +392,7 @@ int main(int argc, char **argv) {
  tree->setCurrentIndexC(model->getAllNotesButtonIndex());QTest::qWait(300);
  window->setTheme(Theme::Dark);QTest::qWait(100);window->findChild<QPushButton*>("newNoteButton")->click();QTest::qWait(250);text->insertPlainText("Delete button probe");QTest::qWait(350);
  const auto deleteIndex=list->currentIndex();const int deleteId=deleteIndex.data(NoteListModel::NoteID).toInt();
- const QRect deleteRow=list->visualRect(deleteIndex);QCursor::setPos(list->viewport()->mapToGlobal(deleteRow.center()));QTest::qWait(180);
+ const QRect deleteRow=list->visualRect(deleteIndex);list->scrollTo(deleteIndex);QApplication::processEvents();const QPoint deletePoint=list->visualRect(deleteIndex).center();QCursor::setPos(list->viewport()->mapToGlobal(deletePoint));QMouseEvent hoverDelete(QEvent::MouseMove,QPointF(deletePoint),QPointF(list->viewport()->mapToGlobal(deletePoint)),Qt::NoButton,Qt::NoButton,Qt::NoModifier);QApplication::sendEvent(list->viewport(),&hoverDelete);QTest::qWait(180);
  auto *deleteButton=list->findChild<QPushButton*>("noteRowDeleteButton");
  check(deleteButton && deleteButton->isVisible() && deleteButton->property("noteIndex").value<QPersistentModelIndex>()==deleteIndex,"hover delete targets exact note");
  check(deleteButton && deleteButton->y()>=deleteRow.top() && deleteButton->y()<deleteRow.top()+32,"delete button shares title/date line");
@@ -401,7 +401,7 @@ int main(int argc, char **argv) {
  QElapsedTimer deleteWait;deleteWait.start();while(deleteWait.elapsed()<3000 && (listModel->getNoteIndex(deleteId).isValid() || !assertParent(deleteId,TRASH_FOLDER_ID)))QTest::qWait(20);
  check(assertParent(deleteId,TRASH_FOLDER_ID) && !listModel->getNoteIndex(deleteId).isValid(),"hover delete moves note to Trash through existing handler");
  window->findChild<QPushButton*>("newNoteButton")->click();QTest::qWait(700);
- const int emptyId=list->currentIndex().data(NoteListModel::NoteID).toInt();QCursor::setPos(list->viewport()->mapToGlobal(list->visualRect(list->currentIndex()).center()));QTest::qWait(180);
+ const int emptyId=list->currentIndex().data(NoteListModel::NoteID).toInt();list->scrollTo(list->currentIndex());QApplication::processEvents();const QPoint emptyPoint=list->visualRect(list->currentIndex()).center();QCursor::setPos(list->viewport()->mapToGlobal(emptyPoint));QMouseEvent hoverEmpty(QEvent::MouseMove,QPointF(emptyPoint),QPointF(list->viewport()->mapToGlobal(emptyPoint)),Qt::NoButton,Qt::NoButton,Qt::NoModifier);QApplication::sendEvent(list->viewport(),&hoverEmpty);QTest::qWait(180);
  if(deleteButton)deleteButton->click();QTest::qWait(600);
  check(!listModel->getNoteIndex(emptyId).isValid(),"hover delete also discards empty temporary note safely");
  check(dropNotes({noteIds[0]},child),"drop single note to nested folder accepted");check(assertParent(noteIds[0],child.data(NodeItem::NodeId).toInt()),"single note moved to nested folder in SQLite");
