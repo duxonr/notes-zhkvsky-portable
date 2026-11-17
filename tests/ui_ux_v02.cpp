@@ -1,3 +1,6 @@
+#include <QQuickView>
+#include <QScrollBar>
+#include <QStyleOptionSlider>
 #include <QElapsedTimer>
 #include "noteeditorlogic.h"
 #include "taglistdelegate.h"
@@ -94,6 +97,41 @@ int main(int argc, char **argv) {
  auto *tree=window->findChild<NodeTreeView*>("treeView"); auto *model=qobject_cast<NodeTreeModel*>(tree->model()); auto *logic=window->findChild<TreeViewLogic*>();
  if(!tree||!model||!logic) return 3;
  window->findChild<QSplitter*>("splitter")->setSizes({300,250,700}); QTest::qWait(100);
+ if(app.arguments().contains("--scroll-popup-only")) {
+   window->setTheme(Theme::Dark);tree->setCurrentIndexC(model->getAllNotesButtonIndex());QTest::qWait(150);
+   QTest::qWait(500);
+   auto *noteLogic=window->findChild<NoteEditorLogic*>();auto *readyList=window->findChild<NoteListView*>("listView");
+   for(int attempt=0;attempt<3;++attempt){window->findChild<QPushButton*>("newNoteButton")->click();QTest::qWait(350);if(noteLogic->currentEditingNoteId()!=INVALID_NODE_ID && readyList->currentIndex().isValid())break;}
+   check(noteLogic->currentEditingNoteId()!=INVALID_NODE_ID && readyList->currentIndex().isValid(),"scroll fixture has a valid new note");
+   auto *text=window->findChild<QTextEdit*>("textEdit");QString body="Sample heading\nMuted preview text\n";for(int i=0;i<600;++i)body+=QString("Line %1: long document scroll test\n").arg(i);text->insertPlainText(body);QTest::qWait(300);
+   auto *bar=text->verticalScrollBar();check(bar->maximum()>0 && bar->isVisible(),"editor scrollbar visible before wheel input");QTest::qWait(1300);
+   check(bar->isVisible(),"editor scrollbar remains visible after inactivity");check(bar->width()==14,"editor scrollbar has 14px hit target");
+   auto *list=window->findChild<NoteListView*>("listView");const QRect row=list->visualRect(list->currentIndex());auto image=list->viewport()->grab().toImage();
+   const auto maxLight=[&](QRect rect){int value=0;for(int y=qMax(0,rect.top());y<=qMin(image.height()-1,rect.bottom());++y)for(int x=qMax(0,rect.left());x<=qMin(image.width()-1,rect.right());++x)value=qMax(value,image.pixelColor(x,y).lightness());return value;};
+   const int left=row.right()-20-note_row::metadataWidth(row.width());const int dateLight=maxLight(QRect(QPoint(left,row.top()+10),QPoint(row.right()-44,row.top()+27)));
+   const int titleLight=maxLight(QRect(QPoint(row.left()+20,row.top()+10),QPoint(left-10,row.top()+27)));const int previewLight=maxLight(QRect(QPoint(row.left()+20,row.top()+34),QPoint(left-10,row.top()+54)));
+   out<<"DATE_LIGHT="<<dateLight<<" PREVIEW_LIGHT="<<previewLight<<" TITLE_LIGHT="<<titleLight<<"\n";
+   check(dateLight<titleLight-25 && dateLight<=previewLight+8,"card date muted like preview rather than title");
+   for(auto theme:{Theme::Dark,Theme::Light,Theme::Sepia}){
+     window->setTheme(theme);QTest::qWait(120);const QColor expected=theme==Theme::Dark?QColor("#202226"):theme==Theme::Sepia?QColor("#eee1c8"):QColor("#eceef0");
+     auto pixels=bar->grab().toImage();check(pixels.pixelColor(pixels.width()/2,pixels.height()-5)==expected,"solid scrollbar track in theme "+QString::number(theme));
+     QStyleOptionSlider option;option.initFrom(bar);option.rect=bar->rect();option.orientation=Qt::Vertical;option.minimum=bar->minimum();option.maximum=bar->maximum();option.pageStep=bar->pageStep();option.sliderPosition=bar->value();option.sliderValue=bar->value();option.subControls=QStyle::SC_All;option.activeSubControls=QStyle::SC_ScrollBarSlider;option.state|=QStyle::State_MouseOver;
+     QImage hover(bar->size(),QImage::Format_ARGB32_Premultiplied);hover.fill(Qt::transparent);QPainter p(&hover);bar->style()->drawComplexControl(QStyle::CC_ScrollBar,&option,&p,bar);p.end();int blue=0;for(int y=0;y<hover.height();++y)for(int x=0;x<hover.width();++x)if(hover.pixelColor(x,y)==QColor("#448ac9"))++blue;
+     check(blue>10,"scrollbar thumb renders accent blue on hover theme "+QString::number(theme));
+   }
+   window->setTheme(Theme::Dark);auto *popup=window->findChild<QWidget*>("editorSettingsPopup");QQuickView *quick=nullptr;for(auto *w:QGuiApplication::allWindows())if(w->objectName()=="editorSettingsQuickView")quick=qobject_cast<QQuickView*>(w);
+   check(popup && quick && quick->rootObject(),"settings popup and QML root available");
+   if(popup && quick && quick->rootObject())for(int height:{500,1200,600}){
+     popup->hide();window->resize(1250,height);QTest::qWait(150);QMetaObject::invokeMethod(window,"showEditorSettings");QTest::qWait(300);auto *root=quick->rootObject();
+     out<<"POPUP parent="<<height<<" container="<<popup->height()<<" view="<<quick->height()<<" root="<<root->height()<<"\n";
+     check(qAbs(popup->height()-root->height())<=1 && qAbs(quick->height()-root->height())<=1,"popup container matches content height at "+QString::number(height));
+     check(root->height()>0 && root->height()<=height*0.8+1,"settings popup bounded by parent at "+QString::number(height));
+     check(quick->color()==QColor("#252525") && popup->windowFlags().testFlag(Qt::FramelessWindowHint),"dark popup has themed frameless native backing at "+QString::number(height));
+     if(auto *scroll=root->findChild<QQuickItem*>("editorSettingsVerticalScrollBar")){scroll->setProperty("active",false);auto *content=scroll->property("contentItem").value<QQuickItem*>();if(scroll->property("size").toReal()<1)check(qAbs(scroll->width()-14)<=1 && content && content->opacity()==1,"QML scrollbar stays visible without activity");}
+     popup->hide();
+   }
+   out<<"FAILURES="<<fails<<"\n";out.flush();QMetaObject::invokeMethod(window,"quitApplication",Qt::DirectConnection);return fails?1:0;
+ }
  if(app.arguments().contains("--card-only")) {
    QMetaObject::invokeMethod(logic,"onAddTagRequested");QMetaObject::invokeMethod(logic,"onAddTagRequested");QTest::qWait(150);
    tree->setCurrentIndexC(model->getAllNotesButtonIndex());QTest::qWait(150);window->findChild<QPushButton*>("newNoteButton")->click();QTest::qWait(350);

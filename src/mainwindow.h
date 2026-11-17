@@ -226,10 +226,6 @@ private:
     Theme::Value m_currentTheme;
     QColor m_currentEditorTextColor;
     bool m_areNonEditorWidgetsVisible;
-#if !defined(Q_OS_MAC)
-    QTimer *m_textEditScrollBarTimer;
-    int m_textEditScrollBarTimerDuration;
-#endif
     bool m_isFrameRightTopWidgetsVisible;
     bool m_isEditorSettingsFromQuickViewVisible;
     bool m_isProVersionActivated;

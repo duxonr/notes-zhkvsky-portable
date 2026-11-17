@@ -539,6 +539,7 @@ void NodeTreeView::setCurrentIndexNC(const QModelIndex &index)
 
 void NodeTreeView::setTheme(Theme::Value theme)
 {
+    setCSSThemeAndUpdate(verticalScrollBar(), theme);
     setCSSThemeAndUpdate(this, theme);
     m_theme = theme;
 }

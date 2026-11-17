@@ -432,4 +432,5 @@ void NoteListDelegateEditor::setTheme(Theme::Value theme)
         break;
     }
     }
+    m_dateColor = m_contentColor;
 }

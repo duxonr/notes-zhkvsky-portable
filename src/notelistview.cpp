@@ -689,6 +689,7 @@ void NoteListView::selectionChanged(const QItemSelection &selected, const QItemS
  */
 void NoteListView::setTheme(Theme::Value theme)
 {
+    setCSSThemeAndUpdate(verticalScrollBar(), theme);
     m_actionIconColor = theme == Theme::Dark ? QColor("#dedede") : QColor("#252525");
     setCSSThemeAndUpdate(this, theme);
 }

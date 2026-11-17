@@ -762,4 +762,5 @@ void NoteListDelegate::setTheme(Theme::Value theme)
     }
     }
     emit themeChanged(m_theme);
+    m_dateColor = m_contentColor;
 }

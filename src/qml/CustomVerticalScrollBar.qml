@@ -4,35 +4,27 @@ import QtQuick.Controls.Material 2.12
 
 ScrollBar {
     id: scrollBarControl
-//    parent: scrollViewControl
     x: parent.mirrored ? 0 : parent.width - width
-//    y: parent.topPadding
     height: parent.availableHeight
-    property var themeData: {{theme: "Light"}}
-    property bool isDarkGray: true // Deterimnes wether the scrollbar color in Dark mode should be grayish or darkish
+    width: 14
+    padding: 2
+    hoverEnabled: true
+    property var themeData: ({theme: "Light"})
+    property bool isDarkGray: true
     property bool showBackground: false
+    property color trackColor: themeData.theme === "Dark" ? "#202226" : themeData.theme === "Sepia" ? "#eee1c8" : "#eceef0"
+    property color thumbColor: themeData.theme === "Dark" ? "#737d89" : themeData.theme === "Sepia" ? "#9b8f7d" : "#8a939e"
 
     background: Rectangle {
-        width: scrollBarControl.hovered ? 1 : 7
-        radius: width / 2
-        height: scrollBarControl.availableHeight
-        color: "transparent"
-        border.color: scrollBarControl.themeData.theme === "Dark" ? "#534c53" : "#dfdfdf"
-        opacity: 0.25
-        visible: scrollBarControl.active && scrollBarControl.hovered && scrollBarControl.showBackground
+        implicitWidth: 14
+        color: scrollBarControl.trackColor
+        radius: 7
+        visible: scrollBarControl.showBackground && scrollBarControl.size < 1.0
     }
-
     contentItem: Rectangle {
-        implicitWidth: scrollBarControl.hovered ? 12 : 7
-        radius: width / 2
-        color: scrollBarControl.pressed ? (scrollBarControl.themeData.theme === "Dark" ? (scrollBarControl.isDarkGray ? "#858185" : "#040404") :"#5e5d5d") : (scrollBarControl.themeData.theme === "Dark" ? (scrollBarControl.isDarkGray ? "#a29ea2" : "#0e0e0e") : "#7d7d7d")
-        opacity: scrollBarControl.policy === ScrollBar.AlwaysOn || (scrollBarControl.active && scrollBarControl.size < 1.0) ? 0.75 : 0
-
-        Behavior on opacity {
-            NumberAnimation {
-                duration: 250
-            }
-        }
+        implicitWidth: 10
+        radius: 5
+        color: scrollBarControl.pressed ? "#2f73b2" : scrollBarControl.hovered ? "#448ac9" : scrollBarControl.thumbColor
+        opacity: scrollBarControl.size < 1.0 ? 1 : 0
     }
 }
-

@@ -6,6 +6,7 @@ import nuttyartist.notes 1.0
 
 Item {
     id: settingsContainer
+    property real maximumPaneHeight: 500
     property int extraWidthForQWidgets: platform === "Apple" ? 60 : 0
     property int extraHeightForQWidgets: platform === "Apple" ? 40 : 0
     width: settingsPane.width + extraWidthForQWidgets
@@ -45,14 +46,14 @@ Item {
 
         function onEditorSettingsShowed (data) {
             var settingsPaneHeightByParentWindow = 0.80 * data.parentWindowHeight; // 80 percent of the parent window's height
-            settingsPane.height = scrollViewControl.contentHeight > settingsPaneHeightByParentWindow ? settingsPaneHeightByParentWindow : scrollViewControl.contentHeight;
+            settingsContainer.maximumPaneHeight = settingsPaneHeightByParentWindow;
             revealSettingsAnimation.start();
             settingsContainer.updateScrollBarPosition();
         }
 
         function onMainWindowResized (data) {
             var settingsPaneHeightByParentWindow = 0.80 * data.parentWindowHeight; // 80 percent of the parent window's height
-            settingsPane.height = scrollViewControl.contentHeight > settingsPaneHeightByParentWindow ? settingsPaneHeightByParentWindow : scrollViewControl.contentHeight;
+            settingsContainer.maximumPaneHeight = settingsPaneHeightByParentWindow;
         }
 
         function onDisplayFontSet (data) {
@@ -173,7 +174,7 @@ Item {
         visible: true
         padding: 0
         width: 240
-        height: 500
+        height: Math.min(scrollViewControl.contentHeight, settingsContainer.maximumPaneHeight)
         contentWidth: 240
         Material.elevation: 10
         Material.background: settingsContainer.mainBackgroundColor
@@ -194,6 +195,7 @@ Item {
 
             ScrollBar.vertical: CustomVerticalScrollBar {
                 id: editorSettingsVerticalScrollBar
+                objectName: "editorSettingsVerticalScrollBar"
                 themeData: settingsContainer.themeData
                 isDarkGray: false
                 showBackground: true

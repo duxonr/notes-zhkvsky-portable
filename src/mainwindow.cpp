@@ -18,6 +18,7 @@
 #include <utils.h>
 
 #include <QScrollBar>
+#include <QQuickItem>
 #include <QShortcut>
 #include <QTextStream>
 #include <QScrollArea>
@@ -116,10 +117,6 @@ MainWindow::MainWindow(QWidget *parent)
       m_currentTheme(Theme::Light),
       m_currentEditorTextColor(26, 26, 26),
       m_areNonEditorWidgetsVisible(true),
-#if !defined(Q_OS_MAC)
-      m_textEditScrollBarTimer(new QTimer(this)),
-      m_textEditScrollBarTimerDuration(1000),
-#endif
       m_isFrameRightTopWidgetsVisible(true),
       m_isEditorSettingsFromQuickViewVisible(false),
       m_isProVersionActivated(false),
@@ -331,14 +328,15 @@ void MainWindow::resizeEvent(QResizeEvent *event)
  */
 void MainWindow::resizeAndPositionEditorSettingsWindow()
 {
-#if defined(Q_OS_WINDOWS) || (defined(Q_OS_UNIX) && !defined(Q_OS_MACOS))
-    m_editorSettingsWidget->resize(240, 0.80 * this->height());
-    QPoint buttonGlobalPos = m_dotsButton->mapToGlobal(QPoint(0, 0));
-    m_editorSettingsWidget->move(buttonGlobalPos.x() - m_editorSettingsWidget->width() + m_dotsButton->width(), buttonGlobalPos.y() + m_dotsButton->height());
+    if (!m_editorSettingsWidget || !m_dotsButton) return;
+    const auto *root = m_editorSettingsQuickView.rootObject();
+    if (!root || root->width() <= 0 || root->height() <= 0) return;
+    m_editorSettingsWidget->resize(qCeil(root->width()), qCeil(root->height()));
+    const QPoint buttonGlobalPos = m_dotsButton->mapToGlobal(QPoint(0, 0));
+#if defined(Q_OS_MACOS)
+    m_editorSettingsWidget->move(buttonGlobalPos.x()-m_editorSettingsWidget->width()+70, buttonGlobalPos.y()+m_dotsButton->height()-10);
 #else
-    m_editorSettingsWidget->resize(300, 0.80 * this->height() + 40);
-    QPoint buttonGlobalPos = m_dotsButton->mapToGlobal(QPoint(0, 0));
-    m_editorSettingsWidget->move(buttonGlobalPos.x() - m_editorSettingsWidget->width() + 70, buttonGlobalPos.y() + m_dotsButton->height() - 10);
+    m_editorSettingsWidget->move(buttonGlobalPos.x()-m_editorSettingsWidget->width()+m_dotsButton->width(), buttonGlobalPos.y()+m_dotsButton->height());
 #endif
 }
 
@@ -417,7 +415,7 @@ void MainWindow::setupMainWindow()
     scollBarStyleFile.open(QFile::ReadOnly);
     QString scrollbarStyleSheet = QString::fromLatin1(scollBarStyleFile.readAll());
     m_ui->textEdit->verticalScrollBar()->setStyleSheet(scrollbarStyleSheet);
-    m_ui->textEdit->verticalScrollBar()->hide();
+    m_ui->textEdit->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 #endif
 
     m_greenMaximizeButton = new QPushButton(this);
@@ -785,20 +783,6 @@ void MainWindow::setupSignalsSlots()
     connect(qApp, &QApplication::applicationStateChanged, this, [this]() { m_listView->update(m_listView->currentIndex()); });
 #endif
 
-    // TextEdit's scroll bar
-#if !defined(Q_OS_MAC)
-    connect(m_textEdit->verticalScrollBar(), &QAbstractSlider::actionTriggered, this, [=]() {
-        m_textEdit->verticalScrollBar()->show();
-        if (m_textEditScrollBarTimer->isActive()) {
-            m_textEditScrollBarTimer->stop();
-            m_textEditScrollBarTimer->start(m_textEditScrollBarTimerDuration);
-        } else {
-            m_textEditScrollBarTimer->start(m_textEditScrollBarTimerDuration);
-        }
-    });
-    connect(m_textEditScrollBarTimer, &QTimer::timeout, this, [=]() { m_textEdit->verticalScrollBar()->hide(); });
-#endif
-
     // MainWindow <-> DBManager
     connect(this, &MainWindow::requestNodesTree, m_dbManager, &DBManager::onNodeTagTreeRequested, Qt::BlockingQueuedConnection);
     connect(this, &MainWindow::requestRestoreNotes, m_dbManager, &DBManager::onRestoreNotesRequested, Qt::BlockingQueuedConnection);
@@ -868,12 +852,6 @@ void MainWindow::setupSignalsSlots()
         if (!m_areNonEditorWidgetsVisible) {
             setVisibilityOfFrameRightWidgets(true);
         }
-#if !defined(Q_OS_MACOS)
-        if (m_textEdit->verticalScrollBar()->isVisible()) {
-            m_textEditScrollBarTimer->stop();
-            m_textEditScrollBarTimer->start(m_textEditScrollBarTimerDuration);
-        }
-#endif
     });
 
 #if defined(Q_OS_MACOS)
@@ -993,11 +971,17 @@ void MainWindow::setupEditorSettings()
 
     m_editorSettingsQuickView.rootContext()->setContextProperty("mainWindow", this);
     m_editorSettingsQuickView.rootContext()->setContextProperty("noteEditorLogic", m_noteEditorLogic);
+    m_editorSettingsQuickView.setObjectName("editorSettingsQuickView");
     m_editorSettingsQuickView.setSource(source);
     m_editorSettingsQuickView.setResizeMode(QQuickView::SizeViewToRootObject);
     m_editorSettingsQuickView.setFlags(Qt::FramelessWindowHint);
     m_editorSettingsQuickView.setColor(Qt::transparent);
     m_editorSettingsWidget = QWidget::createWindowContainer(&m_editorSettingsQuickView, this);
+    m_editorSettingsWidget->setObjectName("editorSettingsPopup");
+    if (auto *root = m_editorSettingsQuickView.rootObject()) {
+        connect(root, &QQuickItem::heightChanged, this, &MainWindow::resizeAndPositionEditorSettingsWindow);
+        connect(root, &QQuickItem::widthChanged, this, &MainWindow::resizeAndPositionEditorSettingsWindow);
+    }
 #if defined(Q_OS_MACOS)
 #  if QT_VERSION >= QT_VERSION_CHECK(6, 2, 0)
     m_editorSettingsWidget->setWindowFlags(Qt::Popup | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint);
@@ -1006,7 +990,7 @@ void MainWindow::setupEditorSettings()
     m_editorSettingsWidget->setAttribute(Qt::WA_AlwaysStackOnTop);
 #  endif
 #elif _WIN32
-    m_editorSettingsWidget->setWindowFlags(Qt::Window | Qt::CustomizeWindowHint);
+    m_editorSettingsWidget->setWindowFlags(Qt::Window | Qt::CustomizeWindowHint | Qt::FramelessWindowHint);
     m_editorSettingsWidget->setAttribute(Qt::WA_AlwaysStackOnTop);
 #else
     m_editorSettingsWidget->setWindowFlags(Qt::Tool);
@@ -1014,7 +998,11 @@ void MainWindow::setupEditorSettings()
 #endif
     resizeAndPositionEditorSettingsWindow();
     m_editorSettingsWidget->setStyleSheet("background:transparent;");
+#if defined(Q_OS_MACOS)
     m_editorSettingsWidget->setAttribute(Qt::WA_TranslucentBackground);
+#else
+    m_editorSettingsWidget->setAutoFillBackground(true);
+#endif
     m_editorSettingsWidget->hide();
     m_editorSettingsWidget->installEventFilter(this);
 
@@ -2387,6 +2375,14 @@ void MainWindow::setTheme(Theme::Value theme)
             QStringLiteral(" QLineEdit#noteTitleEdit { color: %1; placeholder-text-color: %2; selection-color: white; selection-background-color: #448ac9; }")
                 .arg(m_currentEditorTextColor.name(), placeholder.name()));
     }
+    setCSSThemeAndUpdate(m_textEdit->verticalScrollBar(), theme);
+#if !defined(Q_OS_MACOS)
+    if (m_editorSettingsWidget) {
+        const QColor background = theme == Theme::Dark ? QColor("#252525") : QColor("#ffffff");
+        m_editorSettingsQuickView.setColor(background);
+        m_editorSettingsWidget->setStyleSheet(QStringLiteral("background-color: %1; border: none;").arg(background.name()));
+    }
+#endif
     m_listViewLogic->setTheme(theme);
     m_aboutWindow.setTheme(theme);
     m_treeViewLogic->setTheme(theme);
@@ -3722,11 +3718,6 @@ bool MainWindow::eventFilter(QObject *object, QEvent *event)
             m_ui->centralWidget->setCursor(Qt::ArrowCursor);
         }
 
-#if !defined(Q_OS_MACOS)
-        if (object == m_textEdit->verticalScrollBar()) {
-            m_textEditScrollBarTimer->stop();
-        }
-#endif
 
         break;
     }
@@ -3905,12 +3896,6 @@ bool MainWindow::eventFilter(QObject *object, QEvent *event)
             if (!m_areNonEditorWidgetsVisible) {
                 setVisibilityOfFrameRightWidgets(true);
             }
-#if !defined(Q_OS_MACOS)
-            if (m_textEdit->verticalScrollBar()->isVisible()) {
-                m_textEditScrollBarTimer->stop();
-                m_textEditScrollBarTimer->start(m_textEditScrollBarTimerDuration);
-            }
-#endif
         }
         break;
     }
