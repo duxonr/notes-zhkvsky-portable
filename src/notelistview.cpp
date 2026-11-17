@@ -271,11 +271,21 @@ void NoteListView::init()
     connect(hoverWatch, &QTimer::timeout, this, [this,deleteButton] {
         const QPoint pos = viewport()->mapFromGlobal(QCursor::pos());
         const auto index = indexAt(pos);
+        auto *delegate = static_cast<NoteListDelegate *>(itemDelegate());
+        const QModelIndex hovered = isRowHovered(index) ? index : QModelIndex();
+        if (m_hoveredNote != hovered || delegate->hoveredIndex() != hovered) {
+            const auto previous = m_hoveredNote;
+            m_hoveredNote = hovered;
+            delegate->setHoveredIndex(hovered);
+            for (const QModelIndex &rowIndex : {QModelIndex(previous),hovered}) if (rowIndex.isValid()) {
+                viewport()->update(visualRect(rowIndex));
+                if (auto *editor = indexWidget(rowIndex)) editor->update();
+            }
+        }
         if (!isVisible() || !viewport()->rect().contains(pos) || !index.isValid() || isDragging()
             || (isPinnedNotesCollapsed() && index.data(NoteListModel::NoteIsPinned).toBool())) {
             deleteButton->hide(); return;
         }
-        const auto *delegate = static_cast<NoteListDelegate *>(itemDelegate());
         const auto *notes = static_cast<NoteListModel *>(model());
         const QRect row = visualRect(index);
         const int y = row.top() + delegate->bodyTopOffset(index,*notes) + 10;
@@ -283,6 +293,7 @@ void NoteListView::init()
         deleteButton->setProperty("noteIndex",QVariant::fromValue(QPersistentModelIndex(index)));
         deleteButton->move(row.right()-43,y-3);
         deleteButton->setIconColor(m_actionIconColor);
+        deleteButton->setRowBackground(delegate->rowBackgroundColor(index));
         deleteButton->show();deleteButton->raise();
     });
     hoverWatch->start(80);
@@ -291,6 +302,16 @@ void NoteListView::init()
     viewport()->setAttribute(Qt::WA_Hover);
 
     setupSignalsSlots();
+}
+
+bool NoteListView::isRowHovered(const QModelIndex &index) const
+{
+    if (!isVisible() || !index.isValid() || !model()) return false;
+    const QPoint pos = viewport()->mapFromGlobal(QCursor::pos());
+    if (!viewport()->rect().contains(pos) || indexAt(pos) != index) return false;
+    if (isPinnedNotesCollapsed() && index.data(NoteListModel::NoteIsPinned).toBool()) return false;
+    const auto *delegate = static_cast<NoteListDelegate *>(itemDelegate());
+    return pos.y() >= visualRect(index).top() + delegate->bodyTopOffset(index,*static_cast<NoteListModel *>(model()));
 }
 
 bool NoteListView::isDraggingInsidePinned() const

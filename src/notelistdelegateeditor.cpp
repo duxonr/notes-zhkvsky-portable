@@ -130,33 +130,12 @@ void NoteListDelegateEditor::paintBackground(QPainter *painter, const QStyleOpti
     auto const *noteListModel = static_cast<NoteListModel *>(m_view->model());
     bufferRect.setY(bufferRect.y() + m_delegate->bodyTopOffset(index, *noteListModel));
     auto isPinned = index.data(NoteListModel::NoteIsPinned).toBool();
-    if (m_view->selectionModel()->isSelected(index)) {
-        if (qApp->applicationState() == Qt::ApplicationActive) {
-            if (m_isActive) {
-                bufferPainter.fillRect(bufferRect, QBrush(m_activeColor));
-                m_tagListView->setBackground(m_activeColor);
-            } else {
-                bufferPainter.fillRect(bufferRect, QBrush(m_notActiveColor));
-                m_tagListView->setBackground(m_notActiveColor);
-            }
-        } else if (qApp->applicationState() == Qt::ApplicationInactive) {
-            bufferPainter.fillRect(bufferRect, QBrush(m_applicationInactiveColor));
-            m_tagListView->setBackground(m_applicationInactiveColor);
-        }
-    } else if (underMouseC()) {
-        if (m_view->isDragging()) {
-            if (isPinned) {
-                auto rect = bufferRect;
-                rect.setTop(rect.bottom() - 5);
-                bufferPainter.fillRect(rect, QBrush("#d6d5d5"));
-            }
-        } else {
-            bufferPainter.fillRect(bufferRect, QBrush(m_hoverColor));
-            m_tagListView->setBackground(m_hoverColor);
-        }
-    } else {
-        bufferPainter.fillRect(bufferRect, QBrush(m_defaultColor));
-        m_tagListView->setBackground(m_defaultColor);
+    const QColor background = m_delegate->rowBackgroundColor(index);
+    bufferPainter.fillRect(bufferRect, background);
+    m_tagListView->setBackground(background);
+    if (m_view->isDragging() && isPinned && m_view->isRowHovered(index)) {
+        auto indicator = bufferRect; indicator.setTop(indicator.bottom()-5);
+        bufferPainter.fillRect(indicator, QColor("#d6d5d5"));
     }
     if (m_view->isDragging() && !isPinned && !m_view->isDraggingInsidePinned()) {
         if ((noteListModel != nullptr) && noteListModel->isFirstUnpinnedNote(index) && (index.row() == (noteListModel->rowCount() - 1))) {

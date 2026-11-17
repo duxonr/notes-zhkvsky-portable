@@ -36,6 +36,7 @@ public:
     void closeAllEditor();
     void setListViewInfo(const ListViewInfo &newListViewInfo);
     bool isDragging() const;
+    bool isRowHovered(const QModelIndex &index) const;
 
     bool isPinnedNotesCollapsed() const;
     void setIsPinnedNotesCollapsed(bool newIsPinnedNotesCollapsed);
@@ -84,6 +85,7 @@ signals:
     void noteListViewClicked();
 
 private:
+    QPersistentModelIndex m_hoveredNote;
     QColor m_actionIconColor = QColor("#252525");
     bool m_isScrollBarHidden;
     bool m_animationEnabled;

@@ -26,3 +26,12 @@ Acceptance evidence:
 - `TEST/card-feedback-confirmed/ui-test-report.txt`: 12 PASS, FAILURES=0.
 - `TEST/card-dot-confirmed/ui-test-report.txt`: two-item row probe PASS; viewport 34x16, item rectangles (0,0,16,16) and (16,0,16,16).
 - Ordinary final Notes.exe was launched with synthetic data in `TEST/Карточки заметок`. The selected pinned note was checked visually: light delete icon, HH:mm dates in list/editor, dots in horizontal rows at right, and subtle gray heading lines. Screenshot: `card-metadata-verified.jpg`. Sidebar and editor tag labels remain visible. Dot view background is transparent.
+
+## Continuous row hover and background compositing
+
+Branch: `fix/note-row-hover-compositing`.
+Row hover is determined by the full viewport row rectangle, including child widgets, rather than a card-only enter/leave flag. The existing action timer invalidates the previous and current row when this target changes. Delegate and tag-card painters share one opaque background obtained by blending the existing theme layer onto its base exactly once. The floating delete button fills the same background and omits its separate hover backplate; icon contrast and destructive hover color remain unchanged. Other sidebar action buttons retain their previous hover treatment.
+
+Evidence: `TEST/hover-halo-after/ui-test-report.txt` has 30 PASS, FAILURES=0, covering selected/unselected rows in dark/light/sepia, actual unselected hover highlighting, visible delete controls, equal background pixels under the delete button and dots, and pointer crossing onto the dots. `TEST/hover-halo-regression/ui-test-report.txt` has 82 PASS, FAILURES=0; its runner also passed separate-process heading/Kanban persistence. Ordinary Notes.exe was launched in `TEST/Проверка фона карточек` with synthetic data. No database/settings format changes.
+
+Full pre-update backup: `D:\01_PROJECTS\NOTES_ZHKVSKY\Backups\Notes_C_before_hover_halo_20261117_161051`.

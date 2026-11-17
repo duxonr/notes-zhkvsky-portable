@@ -34,6 +34,7 @@ public:
     void setActive(bool isActive);
     void setTheme(Theme::Value theme);
     Theme::Value theme() const;
+    QColor rowBackgroundColor(const QModelIndex &index) const;
     void setIsInAllNotes(bool newIsInAllNotes);
     bool isInAllNotes() const;
     int minimumContentHeight() const;

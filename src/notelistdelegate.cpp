@@ -234,6 +234,21 @@ QTimeLine::State NoteListDelegate::animationState()
     return m_timeLine->state();
 }
 
+QColor NoteListDelegate::rowBackgroundColor(const QModelIndex &index) const
+{
+    QColor layer = m_defaultColor;
+    if (m_view->selectionModel()->isSelected(index)) {
+        layer = qApp->applicationState() != Qt::ApplicationActive ? m_applicationInactiveColor
+                : m_isActive ? m_activeColor : m_notActiveColor;
+    } else if (m_view->isRowHovered(index) && !m_view->isDragging()) {
+        layer = m_hoverColor;
+    }
+    // Composite once onto the row's opaque base. Child widgets must not blend it again.
+    const int alpha = layer.alpha();
+    const auto blend = [alpha](int foreground, int background) { return (foreground*alpha + background*(255-alpha)+127)/255; };
+    return QColor(blend(layer.red(),m_defaultColor.red()),blend(layer.green(),m_defaultColor.green()),blend(layer.blue(),m_defaultColor.blue()));
+}
+
 void NoteListDelegate::paintBackground(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const
 {
     auto bufferSize = bufferSizeHint(option, index);
@@ -253,33 +268,11 @@ void NoteListDelegate::paintBackground(QPainter *painter, const QStyleOptionView
     const bool isCollapsedPinnedHeader = m_view->isPinnedNotesCollapsed() && model->isFirstPinnedNote(index);
     if (model->hasPinnedNote() && isCollapsedPinnedHeader) {
         bufferPainter.fillRect(bufferRect, QBrush(m_defaultColor));
-    } else if ((option.state & QStyle::State_Selected) == QStyle::State_Selected) {
-        if (qApp->applicationState() == Qt::ApplicationActive) {
-            if (m_isActive) {
-                bufferPainter.fillRect(bufferRect, QBrush(m_activeColor));
-            } else {
-                bufferPainter.fillRect(bufferRect, QBrush(m_notActiveColor));
-            }
-        } else if (qApp->applicationState() == Qt::ApplicationInactive) {
-            bufferPainter.fillRect(bufferRect, QBrush(m_applicationInactiveColor));
-        }
-    } else if ((option.state & QStyle::State_MouseOver) == QStyle::State_MouseOver) {
-        if (static_cast<NoteListView *>(m_view)->isDragging()) {
-            if (isPinned) {
-                auto rect = bufferRect;
-                rect.setTop(rect.bottom() - 5);
-                bufferPainter.fillRect(rect, QBrush("#d6d5d5"));
-            }
-        } else {
-            bufferPainter.fillRect(bufferRect, QBrush(m_hoverColor));
-        }
     } else {
-        if (m_view->isPinnedNotesCollapsed()) {
-            if (!isPinned) {
-                bufferPainter.fillRect(bufferRect, QBrush(m_defaultColor));
-            }
-        } else {
-            bufferPainter.fillRect(bufferRect, QBrush(m_defaultColor));
+        bufferPainter.fillRect(bufferRect, rowBackgroundColor(index));
+        if (m_view->isDragging() && isPinned && m_view->isRowHovered(index)) {
+            auto indicator = bufferRect; indicator.setTop(indicator.bottom()-5);
+            bufferPainter.fillRect(indicator, QColor("#d6d5d5"));
         }
     }
     if (static_cast<NoteListView *>(m_view)->isDragging() && !isPinned && !static_cast<NoteListView *>(m_view)->isDraggingInsidePinned()) {

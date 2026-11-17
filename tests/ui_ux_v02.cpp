@@ -102,7 +102,28 @@ int main(int argc, char **argv) {
    for(int row=0;row<model->rowCount(model->rootIndex());++row){auto ix=model->index(row,0,model->rootIndex());if(ix.data(NodeItem::ItemType).toInt()==NodeItem::TagItem)tree->addNoteToTag(id,ix.data(NodeItem::NodeId).toInt());}QTest::qWait(300);
    auto *c=qobject_cast<NoteListDelegateEditor*>(l->indexWidget(l->currentIndex()));auto *v=c?c->findChild<TagListView*>():nullptr;
    if(v){auto a=v->visualRect(v->model()->index(0,0)),b=v->visualRect(v->model()->index(1,0));out<<"GEOMETRY view="<<v->width()<<"x"<<v->height()<<" viewport="<<v->viewport()->width()<<"x"<<v->viewport()->height()<<" items="<<a.x()<<","<<a.y()<<","<<a.width()<<","<<a.height()<<" / "<<b.x()<<","<<b.y()<<","<<b.width()<<","<<b.height()<<" frame="<<v->frameWidth()<<" spacing="<<v->spacing()<<"\n";
-     check(a.y()==b.y(),"two dot items share horizontal row");}
+     check(a.y()==b.y(),"two dot items share horizontal row");
+     for(auto theme:{Theme::Dark,Theme::Light,Theme::Sepia})for(bool selected:{true,false}){
+       window->setTheme(theme);QTest::qWait(60);const auto noteIndex=static_cast<NoteListModel*>(l->model())->getNoteIndex(id);
+       if(selected){l->setCurrentIndexC(noteIndex);l->setCurrentRowActive(true);}else l->clearSelection();
+       const QRect row=l->visualRect(noteIndex);
+       const auto sample=[&](QWidget *w,const QPoint &pt){return window->grab().toImage().pixelColor(w->mapTo(window,pt));};
+       QCursor::setPos(window->mapToGlobal(QPoint(window->width()-30,window->height()-30)));QTest::qWait(120);
+       const QColor idleBackground=sample(l->viewport(),QPoint(row.left()+6,row.top()+20));
+       QCursor::setPos(l->viewport()->mapToGlobal(QPoint(row.left()+60,row.top()+15)));QTest::qWait(150);
+       auto *button=l->findChild<QPushButton*>("noteRowDeleteButton");
+       const QColor rowBackground=sample(l->viewport(),QPoint(row.left()+6,row.top()+20));
+       if(!selected)check(rowBackground!=idleBackground,"unselected row actually highlights on hover theme "+QString::number(theme));
+       check(button && button->isVisible(),"delete control visible for hovered row theme "+QString::number(theme)+" selected "+QString::number(selected));
+       if(button){QCursor::setPos(button->mapToGlobal(button->rect().center()));QTest::qWait(150);
+         check(sample(button,QPoint(2,6))==rowBackground,"delete background equals row theme "+QString::number(theme)+" selected "+QString::number(selected));
+         check(sample(v->viewport(),QPoint(1,1))==rowBackground,"dot background equals row while over delete theme "+QString::number(theme)+" selected "+QString::number(selected));
+         QCursor::setPos(v->viewport()->mapToGlobal(QPoint(8,8)));QTest::qWait(150);
+         check(sample(l->viewport(),QPoint(row.left()+6,row.top()+20))==rowBackground && sample(v->viewport(),QPoint(1,1))==rowBackground,"row hover continues across dot child theme "+QString::number(theme)+" selected "+QString::number(selected));
+       }
+       QCursor::setPos(window->mapToGlobal(QPoint(window->width()-30,window->height()-30)));QTest::qWait(120);
+     }
+   }
    out<<"FAILURES="<<fails<<"\n";out.flush();QMetaObject::invokeMethod(window,"quitApplication",Qt::DirectConnection);return fails?1:0;
  }
  if(app.arguments().contains("--feedback-only")) {
