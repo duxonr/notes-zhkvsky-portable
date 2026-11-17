@@ -42,6 +42,7 @@ public:
     void chooseImage();
     void setTheme(Theme::Value, QColor foreground);
     void closeEditor();
+    bool cancelDrag();
     bool handleMouse(QMouseEvent *);
     void updateMetadata(const QTextCursor &, const QJsonObject &);
     QList<QTextCursor> cards() const;
@@ -87,6 +88,8 @@ private:
     QPointer<QTextEdit> m_inlineDescription;
     QTextCursor m_dragCursor;
     QPoint m_dragStart;
+    QPointer<QLabel> m_dropLine;
+    int m_dropPosition = -1;
     QTextCursor m_editCursor;
     QColor m_foreground{26,26,26};
     Theme::Value m_theme = Theme::Light;

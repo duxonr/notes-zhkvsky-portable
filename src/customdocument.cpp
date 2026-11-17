@@ -47,6 +47,7 @@ void CustomDocument::mouseMoveEvent(QMouseEvent *event)
 
 bool CustomDocument::eventFilter(QObject *obj, QEvent *event)
 {
+    if(event->type()==QEvent::KeyPress&&static_cast<QKeyEvent*>(event)->key()==Qt::Key_Escape&&m_screenshots->cancelDrag())return true;
     if (obj == viewport() && (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseButtonRelease || event->type() == QEvent::MouseMove)) {
         if (m_screenshots->handleMouse(static_cast<QMouseEvent *>(event))) {
             if(event->type()==QEvent::MouseMove)emit mouseMoved();
