@@ -1,0 +1,14 @@
+# Screenshot Blocks MVP — architecture
+
+Baseline: c846e1f81bc4cce1671f49cf9e0e64a56e8ee2f4. Branch: feature/screenshot-blocks-mvp.
+Full verified backup: D:\01_PROJECTS\NOTES_ZHKVSKY\Backups\Notes_C_before_screenshot_blocks_20261117_180610.
+
+The existing CustomDocument is a QTextEdit; NoteEditorLogic saves its plain text into node_table.content and Kanban addresses logical paragraph numbers. Cards use one QTextObjectInterface replacement character in a dedicated paragraph. CustomDocument serializes that character into a versioned, validated marker with UUID and JSON metadata encoded as base64url. Loading reverses this operation. Metadata, order and note ownership therefore commit together in the existing SQLite content column; no schema migration is needed. Existing text notes retain their previous representation. The display paragraph count equals stored paragraph count.
+
+Qt document Undo retains object formats (including title and description); deleting a card never deletes its files. Card edits replace one object format as one undo command. Clipboard carries a custom source MIME representation, with readable Markdown as the text fallback. Kanban uses displayed document paragraphs and treats image paragraphs as task boundaries, preserving inline objects during task/column moves. Preview/title extraction omits marker payloads. Export emits readable Markdown links and copies original attachments alongside exported notes.
+
+Images belong to Data/Attachments/<uuid>.<format>, thumbnails to Data/Thumbnails/<uuid>.png. Paths are relative and strictly validated. Atomic QSaveFile writes, file reads/decoding and thumbnail creation run in the existing QtConcurrent pool; visible cards request a bounded thumbnail cache. No permanent widget per card: drawing uses a 96px object, and only the active title/description editor or anchored description popup exists. Background operations finish before shutdown; incomplete/missing files are explicit recoverable placeholders, never a reason to remove metadata. Originals are retained for Undo, deleted notes, exports and backups; MVP has no automatic garbage collection.
+
+Design follows note-list density: 120x80 aspect-fit preview, one semibold title line, two muted description lines, small hover delete control and overflow-only description affordance. Same Notes font, theme foreground and softly raised neutral background; blue interface accent for interaction. Avoid large image blocks, tall expanding descriptions and independent visual chrome.
+
+Implementation proceeds in the six requested stages, with builds and evidence captured at each stable checkpoint. Release remains separate from C: until tests pass. Tests and benchmarks use synthetic data, including Cyrillic paths, 4K originals and 1/10/50/100 cards. Existing Markdown, Pro Kanban, headings, tags and portable regressions remain required.
