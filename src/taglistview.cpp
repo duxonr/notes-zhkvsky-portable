@@ -1,5 +1,6 @@
 #include "taglistview.h"
 #include <QFile>
+#include <QScrollBar>
 #include <QDebug>
 #include <QMouseEvent>
 
@@ -41,27 +42,20 @@ void TagListView::setBackground(const QColor color)
 void TagListView::reset()
 {
     QListView::reset();
-    auto sz = sizeHint();
-    if ((model() == nullptr) || model()->rowCount() == 0) {
-        sz.setHeight(0);
-    } else {
-        auto firstIndex = model()->index(0, 0);
-        auto lastIndex = model()->index(model()->rowCount() - 1, 0);
-        auto fr = visualRect(firstIndex);
-        fr.setBottom(visualRect(lastIndex).bottom());
-        if (fr.height() < 80) {
-            sz.setHeight(fr.height() + 10);
-        } else {
-            sz.setHeight(80);
-        }
+    doItemsLayout();
+    int height = 0;
+    if (model() && model()->rowCount() > 0) {
+        const QRect last = visualRect(model()->index(model()->rowCount()-1,0));
+        height = qBound(0, last.bottom()+verticalScrollBar()->value()+spacing()+1, 80);
     }
-    setFixedHeight(sz.height());
+    if (height != this->height()) { setFixedHeight(height); emit contentHeightChanged(); }
+
 }
 
 void TagListView::resizeEvent(QResizeEvent *event)
 {
     QListView::resizeEvent(event);
-    setWrapping(true);
+    reset();
 }
 
 void TagListView::mousePressEvent(QMouseEvent *event)

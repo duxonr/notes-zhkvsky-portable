@@ -55,4 +55,11 @@ script.write_text(f'@call "{vcvars}" >nul\n{command}\n@if errorlevel 1 exit /b 1
 subprocess.run(['cmd.exe', '/d', '/c', str(script)], cwd=build, check=True)
 result = subprocess.run([str(out / 'UiDriver.exe')], cwd=out)
 print((out / 'ui-test-report.txt').read_text(encoding='utf-8'))
+if result.returncode == 0:
+    report_text = (out / 'ui-test-report.txt').read_text(encoding='utf-8')
+    heading_id = re.search(r'RESTART_HEADING_ID=(\d+)', report_text)
+    if heading_id:
+        restarted = subprocess.run([str(out / 'UiDriver.exe'), '--verify-heading', heading_id[1]], cwd=out)
+        print('PASS heading and edited Kanban body survive process restart' if restarted.returncode == 0 else 'FAIL heading restart', flush=True)
+        raise SystemExit(restarted.returncode)
 raise SystemExit(result.returncode)

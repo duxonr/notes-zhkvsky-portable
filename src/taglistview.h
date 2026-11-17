@@ -11,6 +11,7 @@ public:
     void setTheme(Theme::Value theme);
     void setBackground(QColor color);
 signals:
+    void contentHeightChanged();
     // QAbstractItemView interface
 public slots:
     void reset() override;

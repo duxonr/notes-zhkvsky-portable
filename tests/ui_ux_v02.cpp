@@ -1,3 +1,7 @@
+#include "notelistdelegateeditor.h"
+#include "notelistdelegate.h"
+#include "taglistview.h"
+#include <QLineEdit>
 #include "mainwindow.h"
 #include "nodetreeview.h"
 #include "nodetreemodel.h"
@@ -58,13 +62,24 @@ int main(int argc, char **argv) {
  }
  QFontDatabase::addApplicationFont(":/fonts/fontawesome/fa-solid-900.ttf");
  QFontDatabase::addApplicationFont(":/fonts/material/material-symbols-outlined.ttf");
+ if(app.arguments().contains("--verify-heading")) {
+   const int at=app.arguments().indexOf("--verify-heading");if(app.arguments().size()<=at+1)return 12;
+   auto *restarted=new MainWindow;restarted->show();QTest::qWait(900);
+   auto *t=restarted->findChild<NodeTreeView*>("treeView");auto *m=qobject_cast<NodeTreeModel*>(t->model());
+   t->setCurrentIndexC(m->getAllNotesButtonIndex());QTest::qWait(400);
+   auto *l=restarted->findChild<NoteListView*>("listView");auto *lm=qobject_cast<NoteListModel*>(l->model());
+   auto ix=lm->getNoteIndex(app.arguments()[at+1].toInt());l->setCurrentIndexC(ix);QTest::qWait(200);
+   auto *h=restarted->findChild<QLineEdit*>("noteTitleEdit");auto *body=restarted->findChild<QTextEdit*>("textEdit");
+   const bool ok=ix.isValid() && h->text()=="Persistent heading" && body->toPlainText().contains("Kanban edited") && lm->getNote(ix).hasManualTitle();
+   QMetaObject::invokeMethod(restarted,"quitApplication",Qt::DirectConnection);return ok?0:13;
+ }
  QFile report(QCoreApplication::applicationDirPath()+"/ui-test-report.txt"); report.open(QIODevice::WriteOnly|QIODevice::Text); QTextStream out(&report);
  const QFont fa = QFontDatabase::font("Font Awesome 6 Free Solid","",9);
  out<<"FONT="<<QFontInfo(fa).family()<<" FAMILIES="<<QFontDatabase::families().filter("Awesome").join(",")<<"\n";
  for(uint glyph:{0xf65e,0xf303,0xf1f8,0xf53f})out<<"GLYPH="<<QString::number(glyph,16)<<":"<<QRawFont::fromFont(fa).supportsCharacter(glyph)<<"\n";out.flush();
  out<<"SUBFOLDER_GLYPH="<<QRawFont::fromFont(QFont("Material Symbols Outlined",12)).supportsCharacter(uint(0xe2c8))<<"\n";out.flush();
  int fails=0; auto check=[&](bool ok,const QString &name){out<<(ok?"PASS ":"FAIL ")<<name<<'\n';out.flush(); if(!ok)++fails;};
- MainWindow *window=new MainWindow; window->resize(1250,800); window->show(); QTest::qWait(1200);
+ MainWindow *window=new MainWindow; window->resize(1250,800); window->show();window->raise();window->activateWindow(); QTest::qWait(1200);
  auto *tree=window->findChild<NodeTreeView*>("treeView"); auto *model=qobject_cast<NodeTreeModel*>(tree->model()); auto *logic=window->findChild<TreeViewLogic*>();
  if(!tree||!model||!logic) return 3;
  window->findChild<QSplitter*>("splitter")->setSizes({300,250,700}); QTest::qWait(100);
@@ -76,7 +91,7 @@ int main(int argc, char **argv) {
      drag->setProperty("recorded",true);out<<"DRAG_SIZE="<<drag->pixmap().width()/drag->pixmap().devicePixelRatio()<<"x"<<drag->pixmap().height()/drag->pixmap().devicePixelRatio()<<"\n";out.flush();}});watch.start(100);
    return app.exec();
  }
- const auto hover=[&](const QModelIndex &ix){tree->scrollTo(ix);const QPoint pos=tree->visualRect(ix).center();QMouseEvent move(QEvent::MouseMove,QPointF(pos),QPointF(tree->viewport()->mapToGlobal(pos)),Qt::NoButton,Qt::NoButton,Qt::NoModifier);QApplication::sendEvent(tree->viewport(),&move);QTest::qWait(150);};
+ const auto hover=[&](const QModelIndex &ix){tree->scrollTo(ix);const QPoint pos=tree->visualRect(ix).center();QCursor::setPos(tree->viewport()->mapToGlobal(pos));QMouseEvent move(QEvent::MouseMove,QPointF(pos),QPointF(tree->viewport()->mapToGlobal(pos)),Qt::NoButton,Qt::NoButton,Qt::NoModifier);QApplication::sendEvent(tree->viewport(),&move);QTest::qWait(150);};
  tree->setCurrentIndexC(model->getAllNotesButtonIndex()); tree->addFolderRequested(); QTest::qWait(100);
  QPersistentModelIndex parent;
  for(int r=0;r<model->rowCount(model->rootIndex());++r){auto ix=model->index(r,0,model->rootIndex()); if(ix.data(NodeItem::ItemType).toInt()==NodeItem::FolderItem&&ix.data(NodeItem::NodeId).toInt()>1 && (!parent.isValid() || ix.data(NodeItem::NodeId).toInt()>parent.data(NodeItem::NodeId).toInt())) parent=ix;}
@@ -200,9 +215,24 @@ int main(int argc, char **argv) {
  tree->setCurrentIndexC(model->getAllNotesButtonIndex());QTest::qWait(500);
  for(int i=0;i<3;++i){window->findChild<QPushButton*>("newNoteButton")->click();QTest::qWait(350);text->setFocus();text->insertPlainText(QString("# UI test %1\n\n**Markdown**\n\n## To Do\n- [ ] task").arg(i));QTest::qWait(1000);noteIds<<list->currentIndex().data(NoteListModel::NoteID).toInt();}
  for(int id:noteIds)out<<"TEST_NOTE_ID="<<id<<'\n';out.flush();
+ auto *heading=window->findChild<QLineEdit*>("noteTitleEdit");
+ check(heading && heading->text().isEmpty() && window->focusWidget()==text,"new note focuses body, optional heading empty");
+ out<<"RESTART_HEADING_ID="<<noteIds.last()<<"\n";out.flush();
+ const int titleId=noteIds.last();auto *listModel=qobject_cast<NoteListModel*>(list->model());
+ heading->setFocus();QTest::keyClicks(heading,"Manual heading");QTest::qWait(150);
+ text->setFocus();text->append("Body extension");QTest::qWait(300);
+ check(listModel->getNote(listModel->getNoteIndex(titleId)).fullTitle()=="Manual heading","manual heading survives body editing");
+ tree->setCurrentIndexC(model->getDefaultNotesIndex());QTest::qWait(300);tree->setCurrentIndexC(model->getAllNotesButtonIndex());QTest::qWait(300);
+ list->setCurrentIndexC(listModel->getNoteIndex(titleId));QTest::qWait(200);
+ check(heading->text()=="Manual heading","manual heading restored from database reload");
+ heading->setFocus();heading->selectAll();QTest::keyClick(heading,Qt::Key_Backspace);QTest::qWait(250);
+ check(!listModel->getNote(listModel->getNoteIndex(titleId)).hasManualTitle() && listModel->getNote(listModel->getNoteIndex(titleId)).fullTitle().contains("UI test 2"),"clearing heading restores automatic title");
+ heading->setFocus();QTest::keyClicks(heading,"Persistent heading");QTest::qWait(250);text->setFocus();
  window->findChild<QPushButton*>("switchToKanbanViewButton")->click();QTest::qWait(300);
  QObject *kanban=nullptr;for(auto *quick:window->findChildren<QQuickWidget*>())if(quick->rootObject() && quick->rootObject()->property("isProVersion").isValid())kanban=quick->rootObject();
  check(kanban && kanban->property("isProVersion").toBool(),"Kanban Pro remains active");
+ bool headingAboveBoard=false;for(auto *quick:window->findChildren<QQuickWidget*>())if(quick->rootObject()==kanban)headingAboveBoard=heading->mapTo(window,QPoint(0,heading->height())).y()<=quick->mapTo(window,QPoint(0,0)).y();
+ check(headingAboveBoard,"heading remains above Kanban board");
  if(kanban){check(!kanban->property("isReadOnlyMode").toBool(),"Kanban is editable");
    bool invoked=QMetaObject::invokeMethod(kanban,"checkTaskInLine",Q_ARG(int,5));QTest::qWait(100);check(invoked && text->toPlainText().contains("[x]"),"Kanban checks task through QML handler");
    invoked=QMetaObject::invokeMethod(kanban,"updateTaskText",Q_ARG(int,5),Q_ARG(int,5),Q_ARG(QString,QString("Kanban edited")));QTest::qWait(700);check(invoked && text->toPlainText().contains("Kanban edited"),"Kanban edits task text through QML handler");}
@@ -215,10 +245,45 @@ int main(int argc, char **argv) {
    QMimeData mime;QStringList values;for(int id:ids)values<<QString::number(id);mime.setData(NOTE_MIME,values.join(PATH_SEPARATOR).toUtf8());
    const QPoint pos=tree->visualRect(target).center();QDragEnterEvent enter(pos,Qt::MoveAction,&mime,Qt::LeftButton,Qt::NoModifier);QApplication::sendEvent(tree->viewport(),&enter);
    QDropEvent drop(QPointF(pos),Qt::MoveAction,&mime,Qt::LeftButton,Qt::NoModifier);QApplication::sendEvent(tree->viewport(),&drop);QTest::qWait(500);return drop.isAccepted();};
+ const auto noTag=model->tagIndexFromId(NO_TAG_ID);
+ check(noTag.isValid() && noTag.row()<tags[0].row() && !(model->flags(noTag)&Qt::ItemIsDragEnabled),"NO TAG fixed above ordinary tags");
+ for(int id : {noteIds[0],noteIds[1]}) for(const auto &tag:tags) tree->addNoteToTag(id,tag.data(NodeItem::NodeId).toInt());
+ QTest::qWait(500);
+ const auto tagged=listModel->getNoteIndex(noteIds[0]);
+ auto *card=qobject_cast<NoteListDelegateEditor*>(list->indexWidget(tagged));
+ auto *chips=card?card->findChild<TagListView*>():nullptr;
+ check(chips && chips->height()>0 && chips->height()<40,"two tags occupy one compact row");
+ check(card && chips && card->height()-chips->geometry().bottom()<=14,"no empty area below tag chips");
+ for(int extra=0;extra<19;++extra)QMetaObject::invokeMethod(logic,"onAddTagRequested");QTest::qWait(250);
+ for(int row=0;row<model->rowCount(model->rootIndex());++row){auto ix=model->index(row,0,model->rootIndex());if(ix.data(NodeItem::ItemType).toInt()==NodeItem::TagItem)tree->addNoteToTag(noteIds[0],ix.data(NodeItem::NodeId).toInt());}
+ QTest::qWait(500);card=qobject_cast<NoteListDelegateEditor*>(list->indexWidget(listModel->getNoteIndex(noteIds[0])));chips=card?card->findChild<TagListView*>():nullptr;
+ check(chips && chips->model()->rowCount()==21 && chips->height()<=80 && card->height()-chips->geometry().bottom()<=14,"21 tags wrap with bounded height and no trailing gap");
+ const QString bodyBefore=listModel->getNote(listModel->getNoteIndex(noteIds[0])).content();
+ check(dropNotes({noteIds[0],noteIds[1]},noTag),"NO TAG accepts multiple-note drop");
+ QSqlQuery cleared(db);cleared.prepare("select count(*) from tag_relationship where node_id in (?,?)");cleared.addBindValue(noteIds[0]);cleared.addBindValue(noteIds[1]);
+ check(cleared.exec()&&cleared.next()&&cleared.value(0).toInt()==0,"NO TAG removes all tags in SQLite");cleared.finish();
+ check(listModel->getNote(listModel->getNoteIndex(noteIds[0])).tagIds().isEmpty() && listModel->getNote(listModel->getNoteIndex(noteIds[0])).content()==bodyBefore,"NO TAG updates UI without changing note body");
+ tree->setCurrentIndexC(noTag);QTest::qWait(300);
+ bool onlyUntagged=true;for(int row=0;row<listModel->rowCount();++row)onlyUntagged &= listModel->getNote(listModel->index(row,0)).tagIds().isEmpty();
+ check(onlyUntagged && listModel->rowCount()>=3,"NO TAG selects untagged notes");
+ tree->setCurrentIndexC(model->getAllNotesButtonIndex());QTest::qWait(300);
+ window->findChild<QPushButton*>("newNoteButton")->click();QTest::qWait(250);text->insertPlainText("Delete button probe");QTest::qWait(350);
+ const auto deleteIndex=list->currentIndex();const int deleteId=deleteIndex.data(NoteListModel::NoteID).toInt();
+ const QRect deleteRow=list->visualRect(deleteIndex);QCursor::setPos(list->viewport()->mapToGlobal(deleteRow.center()));QTest::qWait(180);
+ auto *deleteButton=list->findChild<QPushButton*>("noteRowDeleteButton");
+ check(deleteButton && deleteButton->isVisible() && deleteButton->property("noteIndex").value<QPersistentModelIndex>()==deleteIndex,"hover delete targets exact note");
+ check(deleteButton && deleteButton->y()>=deleteRow.top() && deleteButton->y()<deleteRow.top()+32,"delete button shares title/date line");
+ if(deleteButton)deleteButton->click();QTest::qWait(350);
+ check(assertParent(deleteId,TRASH_FOLDER_ID) && !listModel->getNoteIndex(deleteId).isValid(),"hover delete moves note to Trash through existing handler");
+ window->findChild<QPushButton*>("newNoteButton")->click();QTest::qWait(700);
+ const int emptyId=list->currentIndex().data(NoteListModel::NoteID).toInt();QCursor::setPos(list->viewport()->mapToGlobal(list->visualRect(list->currentIndex()).center()));QTest::qWait(180);
+ if(deleteButton)deleteButton->click();QTest::qWait(600);
+ check(!listModel->getNoteIndex(emptyId).isValid(),"hover delete also discards empty temporary note safely");
  check(dropNotes({noteIds[0]},child),"drop single note to nested folder accepted");check(assertParent(noteIds[0],child.data(NodeItem::NodeId).toInt()),"single note moved to nested folder in SQLite");
  check(dropNotes({noteIds[1],noteIds[2]},parent),"drop multiple notes accepted");check(assertParent(noteIds[1],folderId)&&assertParent(noteIds[2],folderId),"multiple notes moved in SQLite");
  QSqlQuery count(db);count.exec("select count(*) from node_table where node_type=0");check(count.next()&&count.value(0).toInt()>=3,"note records retained after moves");
  count.finish(); db.close();
+ check(dropNotes({titleId},model->getDefaultNotesIndex()),"retain heading fixture outside deleted test folder");
  if(!tags.isEmpty()){tree->triggerRowAction(tags[0],NodeTreeView::RowAction::Delete);QTest::qWait(100);check(!tags[0].isValid(),"delete tag uses existing handler");}
  // Removing a top-level tag resets the model; resolve the folder by its stable ID again.
  parent = model->folderIndexFromIdPath(NodePath("/0/" + QString::number(folderId)));

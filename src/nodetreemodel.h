@@ -33,7 +33,8 @@ enum Type {
     FolderItem,
     NoteItem,
     TagItem,
-    RootItem
+    RootItem,
+    NoTagItem
 };
 } // namespace NodeItem
 

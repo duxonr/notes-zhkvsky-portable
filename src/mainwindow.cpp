@@ -814,6 +814,10 @@ void MainWindow::setupSignalsSlots()
     connect(m_noteEditorLogic, &NoteEditorLogic::moveNoteToListViewTop, m_listViewLogic, &ListViewLogic::moveNoteToTop);
     connect(m_noteEditorLogic, &NoteEditorLogic::updateNoteDataInList, m_listViewLogic, &ListViewLogic::setNoteData);
     connect(m_noteEditorLogic, &NoteEditorLogic::deleteNoteRequested, m_listViewLogic, &ListViewLogic::deleteNoteRequested);
+    connect(m_listView, &NoteListView::deleteNoteByIdRequested, this, [this](int id) {
+        if (m_noteEditorLogic->currentEditingNoteId() == id) m_noteEditorLogic->deleteCurrentNote();
+        else { const auto index = m_listModel->getNoteIndex(id); if (index.isValid()) emit m_listView->deleteNoteRequested({index}); }
+    });
     connect(m_listViewLogic, &ListViewLogic::noteTagListChanged, m_noteEditorLogic, &NoteEditorLogic::onNoteTagListChanged);
     connect(m_noteEditorLogic, &NoteEditorLogic::noteEditClosed, m_listViewLogic, &ListViewLogic::onNoteEditClosed);
     connect(m_noteEditorLogic, &NoteEditorLogic::showKanbanView, this, [this]() {
@@ -833,6 +837,7 @@ void MainWindow::setupSignalsSlots()
     });
     connect(m_listViewLogic, &ListViewLogic::requestClearSearchUI, this, &MainWindow::clearSearch);
     connect(m_treeViewLogic, &TreeViewLogic::addNoteToTag, m_listViewLogic, &ListViewLogic::onAddTagRequestD);
+    connect(m_ui->treeView, &NodeTreeView::removeAllTagsRequested, m_listViewLogic, &ListViewLogic::onRemoveAllTagsRequest);
     connect(m_listViewLogic, &ListViewLogic::listViewLabelChanged, this, [this](const QString &l1, const QString &l2) {
         m_ui->listviewLabel1->setText(l1);
         m_ui->listviewLabel2->setText(l2);
@@ -1664,6 +1669,22 @@ void MainWindow::setupModelView()
 #else
     m_noteEditorLogic = new NoteEditorLogic(m_textEdit, m_editorDateLabel, m_searchEdit, m_ui->tagListView, m_tagPool, m_dbManager, this);
 #endif
+    auto *noteTitle = new QLineEdit(m_ui->frameRight);
+    noteTitle->setObjectName("noteTitleEdit");
+    noteTitle->setAccessibleName(tr("Note title"));
+    noteTitle->setToolTip(tr("Optional title. Leave empty to use the beginning of the note."));
+    noteTitle->setPlaceholderText(tr("Title (optional)"));
+    noteTitle->setMinimumHeight(42);
+    QFont headingFont(m_displayFont, 15, QFont::DemiBold);
+    noteTitle->setFont(headingFont);
+    noteTitle->setStyleSheet("QLineEdit { background: transparent; border: none; border-bottom: 1px solid #448ac9; padding: 5px 20px; margin: 0px 20px 6px 20px; }");
+    int titlePosition = m_ui->verticalLayout_textEdit->indexOf(m_textEdit);
+#if QT_VERSION >= QT_VERSION_CHECK(6, 2, 0)
+    if (m_kanbanWidget) titlePosition = qMin(titlePosition, m_ui->verticalLayout_textEdit->indexOf(m_kanbanWidget));
+#endif
+    m_ui->verticalLayout_textEdit->insertWidget(titlePosition, noteTitle);
+    m_noteEditorLogic->setTitleEditor(noteTitle);
+    noteTitle->hide();
     m_editorSettingsQuickView.rootContext()->setContextProperty("noteEditorLogic", m_noteEditorLogic);
 }
 
@@ -2359,6 +2380,10 @@ void MainWindow::setTheme(Theme::Value theme)
     }
     setupTextEditStyleSheet(m_noteEditorLogic->currentMinimumEditorPadding(), m_noteEditorLogic->currentMinimumEditorPadding());
     m_noteEditorLogic->setTheme(theme, m_currentEditorTextColor, m_editorMediumFontSize);
+    if (auto *title = findChild<QLineEdit *>("noteTitleEdit")) {
+        auto pal = title->palette(); pal.setColor(QPalette::Text, m_currentEditorTextColor);
+        pal.setColor(QPalette::PlaceholderText, m_currentEditorTextColor.lighter(130)); title->setPalette(pal);
+    }
     m_listViewLogic->setTheme(theme);
     m_aboutWindow.setTheme(theme);
     m_treeViewLogic->setTheme(theme);
@@ -2424,7 +2449,8 @@ void MainWindow::createNewNote()
         tmpNote.setId(noteId);
         tmpNote.setIsTempNote(true);
         if (inf.isInTag) {
-            tmpNote.setTagIds(inf.currentTagList);
+            auto tags = inf.currentTagList; tags.remove(NO_TAG_ID);
+            tmpNote.setTagIds(tags);
         }
         // insert the new note to NoteListModel
         newNoteIndex = m_listModel->insertNote(tmpNote, 0);

@@ -126,6 +126,7 @@ void NodeTreeItem::recursiveSort()
         QVector<NodeTreeItem *> folderItems;
         QVector<NodeTreeItem *> tagSep;
         QVector<NodeTreeItem *> tagItems;
+        QVector<NodeTreeItem *> noTagItems;
         for (auto *const child : std::as_const(m_childItems)) {
             auto childType = static_cast<NodeItem::Type>(child->getData(NodeItem::Roles::ItemType).toInt());
             if (childType == NodeItem::Type::AllNoteButton) {
@@ -138,6 +139,8 @@ void NodeTreeItem::recursiveSort()
                 folderItems.append(child);
             } else if (childType == NodeItem::Type::TagSeparator) {
                 tagSep.append(child);
+            } else if (childType == NodeItem::Type::NoTagItem) {
+                noTagItems.append(child);
             } else if (childType == NodeItem::Type::TagItem) {
                 tagItems.append(child);
             } else {
@@ -155,6 +158,7 @@ void NodeTreeItem::recursiveSort()
         m_childItems.append(folderSep);
         m_childItems.append(folderItems);
         m_childItems.append(tagSep);
+        m_childItems.append(noTagItems);
         m_childItems.append(tagItems);
     }
 }
@@ -224,7 +228,7 @@ void NodeTreeModel::appendChildNodeToParent(const QModelIndex &parentIndex, cons
                 auto const *childItem = parentItem->getChild(i);
                 auto childType = static_cast<NodeItem::Type>(childItem->getData(NodeItem::Roles::ItemType).toInt());
                 if (childType == NodeItem::Type::TagSeparator) {
-                    row = i + 1;
+                    row = i + 2; // NO TAG stays fixed immediately below the separator.
                     break;
                 }
             }
@@ -353,7 +357,7 @@ QModelIndex NodeTreeModel::tagIndexFromId(int id)
 {
     for (int i = 0; i < m_rootItem->getChildCount(); ++i) {
         auto *child = m_rootItem->getChild(i);
-        if (static_cast<NodeItem::Type>(child->getData(NodeItem::Roles::ItemType).toInt()) == NodeItem::Type::TagItem
+        if (static_cast<NodeItem::Type>(child->getData(NodeItem::Roles::ItemType).toInt()) == (id == NO_TAG_ID ? NodeItem::NoTagItem : NodeItem::TagItem)
             && (static_cast<int>(child->getData(NodeItem::Roles::NodeId).toInt() == id) != 0)) {
             return createIndex(i, 0, child);
         }
@@ -513,6 +517,11 @@ void NodeTreeModel::setTreeData(const NodeTagTreeData &treeData)
     appendFolderSeparator(m_rootItem);
     loadNodeTree(treeData.nodeTreeData, m_rootItem);
     appendTagsSeparator(m_rootItem);
+    QHash<NodeItem::Roles, QVariant> untagged;
+    untagged[NodeItem::ItemType] = NodeItem::NoTagItem;
+    untagged[NodeItem::NodeId] = NO_TAG_ID;
+    untagged[NodeItem::DisplayText] = "NO TAG";
+    m_rootItem->appendChild(new NodeTreeItem(untagged, m_rootItem));
     loadTagList(treeData.tagTreeData, m_rootItem);
     m_rootItem->recursiveSort();
     endResetModel();
@@ -639,6 +648,8 @@ Qt::ItemFlags NodeTreeModel::flags(const QModelIndex &index) const
         return Qt::ItemIsDropEnabled;
     }
 
+    if (index.data(NodeItem::ItemType).toInt() == NodeItem::NoTagItem)
+        return Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsDropEnabled;
     return QAbstractItemModel::flags(index) | Qt::ItemIsDragEnabled | Qt::ItemIsDropEnabled;
 }
 
@@ -733,7 +744,7 @@ bool NodeTreeModel::dropMimeData(const QMimeData *mime, Qt::DropAction action, i
             }
         }
         auto sep = getSeparatorIndex();
-        if ((sep.size() == 2) && (row <= sep[1].row())) {
+        if ((sep.size() == 2) && (row <= sep[1].row() + 1)) {
             return false;
         }
         auto idl = QString::fromUtf8(mime->data(TAG_MIME)).split(PATH_SEPARATOR);

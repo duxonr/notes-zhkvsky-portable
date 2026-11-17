@@ -144,6 +144,7 @@ void ListViewLogic::setNoteData(const NodeData &note)
         QMap<int, QVariant> dataValue;
         auto wasTemp = noteIndex.data(NoteListModel::NoteIsTemp).toBool();
         dataValue[NoteListModel::NoteContent] = QVariant::fromValue(note.content());
+        dataValue[NoteListModel::NoteHasManualTitle] = note.hasManualTitle();
         dataValue[NoteListModel::NoteFullTitle] = QVariant::fromValue(note.fullTitle());
         dataValue[NoteListModel::NoteLastModificationDateTime] = QVariant::fromValue(note.lastModificationdateTime());
         dataValue[NoteListModel::NoteIsTemp] = QVariant::fromValue(note.isTempNote());
@@ -450,6 +451,23 @@ void ListViewLogic::selectNotes(const QModelIndexList &indexes)
     onNotePressed(indexes);
 }
 
+void ListViewLogic::onRemoveAllTagsRequest(int noteId)
+{
+    const auto index = m_listModel->getNoteIndex(noteId);
+    if (!index.isValid()) return;
+    if (!index.data(NoteListModel::NoteIsTemp).toBool()) {
+        bool saved = false;
+        QMetaObject::invokeMethod(m_dbManager, "removeAllTagsFromNote", Qt::BlockingQueuedConnection,
+                                  Q_RETURN_ARG(bool, saved), Q_ARG(int, noteId));
+        if (!saved) return; // Keep the visible tags if the database did not commit.
+    }
+    m_listModel->setData(index, QVariant::fromValue(QSet<int>{}), NoteListModel::NoteTagsList);
+    m_listView->closePersistentEditorC(index);
+    emit noteTagListChanged(noteId, {});
+    if (m_listViewInfo.isInTag)
+        emit requestNotesListInTags(m_listViewInfo.currentTagList, false, INVALID_NODE_ID);
+}
+
 void ListViewLogic::onRemoveTagRequest(const QModelIndex &index, int tagId)
 {
     if (index.isValid()) {
@@ -601,7 +619,9 @@ void ListViewLogic::updateListViewLabel()
             l1 = "Multiple tags ...";
         } else {
             int tagId = *m_listViewInfo.currentTagList.begin();
-            if (!m_tagPool->contains(tagId)) {
+            if (tagId == NO_TAG_ID) {
+                l1 = "NO TAG";
+            } else if (!m_tagPool->contains(tagId)) {
                 l1 = "Tags ...";
             } else {
                 TagData tag = m_tagPool->getTag(tagId);

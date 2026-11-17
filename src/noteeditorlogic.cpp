@@ -86,6 +86,22 @@ NoteEditorLogic::NoteEditorLogic(CustomDocument *textEdit, QLabel *editorDateLab
 #endif
 }
 
+void NoteEditorLogic::setTitleEditor(QLineEdit *title)
+{
+    m_titleEdit = title;
+    connect(title, &QLineEdit::textEdited, this, [this](const QString &text) {
+        if (m_currentNotes.size() != 1) return;
+        auto &note = m_currentNotes[0];
+        note.setHasManualTitle(!text.trimmed().isEmpty());
+        note.setFullTitle(note.hasManualTitle() ? text.trimmed() : getFirstLine(note.content()));
+        note.setIsTempNote(false);
+        note.setLastModificationDateTime(QDateTime::currentDateTime());
+        emit updateNoteDataInList(note);
+        m_isContentModified = true;
+        m_autoSaveTimer.start();
+    });
+}
+
 bool NoteEditorLogic::markdownEnabled() const
 {
     return m_highlighter->document() != nullptr;
@@ -98,6 +114,7 @@ void NoteEditorLogic::setMarkdownEnabled(bool enabled)
 
 void NoteEditorLogic::showNotesInEditor(const QVector<NodeData> &notes)
 {
+    saveNoteToDB();
     auto currentId = currentEditingNoteId();
     if (notes.size() == 1 && notes[0].id() != INVALID_NODE_ID) {
         if (currentId != INVALID_NODE_ID && notes[0].id() != currentId) {
@@ -112,6 +129,11 @@ void NoteEditorLogic::showNotesInEditor(const QVector<NodeData> &notes)
         m_textEdit->blockSignals(true);
 
         m_currentNotes = notes;
+        if (m_titleEdit) {
+            m_titleEdit->setVisible(true);
+            m_titleEdit->setText(notes[0].hasManualTitle() ? notes[0].fullTitle() : QString());
+            m_titleEdit->setPlaceholderText(notes[0].isTempNote() ? tr("Title (optional)") : notes[0].fullTitle());
+        }
         showTagListForCurrentNote();
         //     fixing bug #202
         m_textEdit->setTextBackgroundColor(QColor(247, 247, 247, 0));
@@ -156,6 +178,7 @@ void NoteEditorLogic::showNotesInEditor(const QVector<NodeData> &notes)
         emit checkMultipleNotesSelected(QVariant(true));
 #endif
         m_currentNotes = notes;
+        if (m_titleEdit) m_titleEdit->hide();
         m_tagListView->setVisible(false);
         m_textEdit->blockSignals(true);
         auto verticalScrollBarValueToRestore = m_textEdit->verticalScrollBar()->value();
@@ -211,7 +234,8 @@ void NoteEditorLogic::onTextEditTextChanged()
             m_editorDateLabel->setText(NoteEditorLogic::getNoteDateEditor(noteDate));
             // update note data
             m_currentNotes[0].setContent(m_textEdit->toPlainText());
-            m_currentNotes[0].setFullTitle(firstline);
+            if (!m_currentNotes[0].hasManualTitle()) m_currentNotes[0].setFullTitle(firstline);
+            if (m_titleEdit) m_titleEdit->setPlaceholderText(m_currentNotes[0].fullTitle());
             m_currentNotes[0].setLastModificationDateTime(dateTime);
             m_currentNotes[0].setIsTempNote(false);
             m_currentNotes[0].setScrollBarPosition(m_textEdit->verticalScrollBar()->value());
@@ -704,6 +728,7 @@ void NoteEditorLogic::closeEditor()
         emit noteEditClosed(m_currentNotes[0], false);
     }
     m_currentNotes.clear();
+    if (m_titleEdit) { m_titleEdit->clear(); m_titleEdit->hide(); }
 
     m_textEdit->blockSignals(true);
     m_textEdit->clear();
@@ -722,6 +747,7 @@ void NoteEditorLogic::onNoteTagListChanged(int noteId, const QSet<int> &tagIds)
 
 void NoteEditorLogic::deleteCurrentNote()
 {
+    if (m_titleEdit) { m_titleEdit->clear(); m_titleEdit->hide(); }
     if (isTempNote()) {
         auto noteNeedDeleted = m_currentNotes[0];
         m_currentNotes.clear();

@@ -69,6 +69,7 @@ signals:
     void changeTagColorRequested(const QModelIndex &index);
     void deleteTagRequested(const QModelIndex &index);
     void addNoteToTag(int noteId, int tagId);
+    void removeAllTagsRequested(int noteId);
     void saveExpand(const QStringList &ex);
     void saveSelected(bool isSelectingFolder, const QString &folder, const QSet<int> &tags);
     void saveLastSelectedNote();

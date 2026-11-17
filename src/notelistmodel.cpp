@@ -151,7 +151,7 @@ QVariant NoteListModel::data(const QModelIndex &index, int role) const
     if (index.row() < 0 || index.row() >= (m_noteList.count() + m_pinnedList.count())) {
         return {};
     }
-    if (role < NoteID || role > NoteIsPinned) {
+    if (role < NoteID || role > NoteHasManualTitle) {
         return {};
     }
     const NodeData &note = getRef(index.row());
@@ -159,6 +159,7 @@ QVariant NoteListModel::data(const QModelIndex &index, int role) const
     switch (role) {
     case NoteID:
         return note.id();
+    case NoteHasManualTitle: return note.hasManualTitle();
     case NoteFullTitle: {
         auto text = note.fullTitle().trimmed();
         if (text.startsWith("#")) {
@@ -201,6 +202,8 @@ bool NoteListModel::setData(const QModelIndex &index, const QVariant &value, int
     NodeData &note = getRef(index.row());
     if (role == NoteID) {
         note.setId(value.toInt());
+    } else if (role == NoteHasManualTitle) {
+        note.setHasManualTitle(value.toBool());
     } else if (role == NoteFullTitle) {
         note.setFullTitle(value.toString());
     } else if (role == NoteCreationDateTime) {

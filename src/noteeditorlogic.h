@@ -39,6 +39,7 @@ public:
                              DBManager *dbManager, QObject *parent = nullptr);
 #endif
 
+    void setTitleEditor(QLineEdit *title);
     bool markdownEnabled() const;
     void setMarkdownEnabled(bool enabled);
     static QString getNoteDateEditor(const QString &dateEdited);
@@ -108,6 +109,7 @@ private:
     void addUntitledColumnToTextEditor(int startLinePosition);
 
 private:
+    QLineEdit *m_titleEdit = nullptr;
     CustomDocument *m_textEdit;
     CustomMarkdownHighlighter *m_highlighter;
     QLabel *m_editorDateLabel;

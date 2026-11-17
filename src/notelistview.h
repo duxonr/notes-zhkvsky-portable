@@ -73,6 +73,7 @@ signals:
     void addTagRequested(const QModelIndex &index, int tadId);
     void removeTagRequested(const QModelIndex &index, int tadId);
     void deleteNoteRequested(const QModelIndexList &index);
+    void deleteNoteByIdRequested(int id);
     void restoreNoteRequested(const QModelIndexList &indexes);
     void newNoteRequested();
     void moveNoteRequested(int noteId, int folderId);

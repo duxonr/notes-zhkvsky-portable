@@ -7,6 +7,7 @@
 
 namespace {
 auto constexpr INVALID_NODE_ID = -1;
+auto constexpr NO_TAG_ID = -2;
 auto constexpr ROOT_FOLDER_ID = 0;
 auto constexpr TRASH_FOLDER_ID = 1;
 auto constexpr DEFAULT_NOTES_FOLDER_ID = 2;
@@ -22,6 +23,8 @@ public:
     int id() const;
     void setId(int id);
 
+    bool hasManualTitle() const { return m_hasManualTitle; }
+    void setHasManualTitle(bool value) { m_hasManualTitle = value; }
     QString const &fullTitle() const;
     void setFullTitle(const QString &fullTitle);
 
@@ -80,6 +83,7 @@ public:
     void setChildNotesCount(int newChildCount);
 
 private:
+    bool m_hasManualTitle = false;
     int m_id;
     QString m_fullTitle;
     QDateTime m_lastModificationDateTime;

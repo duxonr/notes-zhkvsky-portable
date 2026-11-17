@@ -45,6 +45,11 @@ void DBManager::open(const QString &path, bool doCreate)
     if (doCreate) {
         createTables();
     }
+    m_manualTitleIds.clear();
+    QSqlQuery titles(m_db);
+    if (titles.exec("SELECT key FROM metadata WHERE key LIKE 'zhkvsky_manual_title_%' AND value = 1")) {
+        while (titles.next()) m_manualTitleIds.insert(titles.value(0).toString().mid(21).toInt());
+    }
     recalculateChildNotesCount();
 }
 
@@ -812,6 +817,27 @@ void DBManager::removeNoteFromTag(int noteId, int tagId)
     decreaseChildNotesCountTag(tagId);
 }
 
+bool DBManager::removeAllTagsFromNote(int noteId)
+{
+    const auto tags = getAllTagForNote(noteId);
+    if (!m_db.transaction()) return false;
+    QSqlQuery query(m_db);
+    query.prepare("DELETE FROM tag_relationship WHERE node_id = :id");
+    query.bindValue(":id", noteId);
+    bool ok = query.exec();
+    for (int tag : tags) {
+        query.prepare("UPDATE tag_table SET child_notes_count = (SELECT COUNT(*) FROM tag_relationship WHERE tag_id = :id) WHERE id = :id");
+        query.bindValue(":id", tag);
+        ok = query.exec() && ok;
+    }
+    if (!ok || !m_db.commit()) { m_db.rollback(); return false; }
+    for (int tag : tags) {
+        query.prepare("SELECT child_notes_count FROM tag_table WHERE id = :id");query.bindValue(":id", tag);
+        if (query.exec() && query.next()) emit childNotesCountUpdatedTag(tag, query.value(0).toInt());
+    }
+    return true;
+}
+
 int DBManager::nextAvailableNodeId()
 {
     QSqlQuery query(m_db);
@@ -1119,6 +1145,7 @@ NodeData DBManager::getNode(int nodeId)
                 qDebug() << __FUNCTION__ << __LINE__ << query2.lastError();
             }
         }
+        node.setHasManualTitle(m_manualTitleIds.contains(node.id()));
         return node;
     }
     qDebug() << "Can't find node with id" << nodeId << ": " << query.lastError();
@@ -1401,10 +1428,12 @@ void DBManager::searchForNotes(const QString &keyword, const ListViewInfo &inf)
         QVector<QSet<int>> nds;
         for (const auto &tagId : inf.currentTagList) {
             QSet<int> nd;
-            if (!query.prepare(R"(SELECT "node_id" FROM tag_relationship WHERE tag_id = :tag_id;)")) {
+            if (!query.prepare(tagId == NO_TAG_ID
+                ? "SELECT id AS node_id FROM node_table WHERE node_type = 0 AND deletion_date = -1 AND NOT EXISTS (SELECT 1 FROM tag_relationship WHERE node_id = node_table.id)"
+                : "SELECT node_id FROM tag_relationship WHERE tag_id = :tag_id")) {
                 qDebug() << __FUNCTION__ << __LINE__ << query.lastError();
             }
-            query.bindValue(QStringLiteral(":tag_id"), tagId);
+            if (tagId != NO_TAG_ID) query.bindValue(QStringLiteral(":tag_id"), tagId);
             bool status = query.exec();
             if (status) {
                 while (query.next()) {
@@ -1453,6 +1482,7 @@ void DBManager::searchForNotes(const QString &keyword, const ListViewInfo &inf)
     inf2.isInSearch = true;
     std::sort(nodeList.begin(), nodeList.end(),
               [](const NodeData &a, const NodeData &b) -> bool { return a.lastModificationdateTime() > b.lastModificationdateTime(); });
+    for (auto &n : nodeList) n.setHasManualTitle(m_manualTitleIds.contains(n.id()));
     emit notesListReceived(nodeList, inf2);
 }
 
@@ -1740,6 +1770,7 @@ void DBManager::onNotesListInFolderRequested(int parentID, bool isRecursive, boo
     inf.scrollToId = scrollToId;
     std::sort(nodeList.begin(), nodeList.end(),
               [](const NodeData &a, const NodeData &b) -> bool { return a.lastModificationdateTime() > b.lastModificationdateTime(); });
+    for (auto &n : nodeList) n.setHasManualTitle(m_manualTitleIds.contains(n.id()));
     emit notesListReceived(nodeList, inf);
 }
 
@@ -1757,10 +1788,12 @@ void DBManager::onNotesListInTagsRequested(const QSet<int> &tagIds, bool newNote
     for (const auto &tagId : tagIds) {
         QSet<int> nd;
         QSqlQuery query(m_db);
-        if (!query.prepare(R"(SELECT "node_id" FROM tag_relationship WHERE tag_id = :tag_id;)")) {
+        if (!query.prepare(tagId == NO_TAG_ID
+                ? "SELECT id AS node_id FROM node_table WHERE node_type = 0 AND deletion_date = -1 AND NOT EXISTS (SELECT 1 FROM tag_relationship WHERE node_id = node_table.id)"
+                : "SELECT node_id FROM tag_relationship WHERE tag_id = :tag_id")) {
             qDebug() << __FUNCTION__ << __LINE__ << query.lastError();
         }
-        query.bindValue(QStringLiteral(":tag_id"), tagId);
+        if (tagId != NO_TAG_ID) query.bindValue(QStringLiteral(":tag_id"), tagId);
         bool status = query.exec();
         if (status) {
             while (query.next()) {
@@ -1806,6 +1839,7 @@ void DBManager::onNotesListInTagsRequested(const QSet<int> &tagIds, bool newNote
     }
     std::sort(nodeList.begin(), nodeList.end(),
               [](const NodeData &a, const NodeData &b) -> bool { return a.lastModificationdateTime() > b.lastModificationdateTime(); });
+    for (auto &n : nodeList) n.setHasManualTitle(m_manualTitleIds.contains(n.id()));
     emit notesListReceived(nodeList, inf);
 }
 
@@ -1831,11 +1865,20 @@ void DBManager::onCreateUpdateRequestedNoteContent(const NodeData &note)
     }
     bool exists = isNodeExist(note);
 
-    if (exists) {
-        updateNoteContent(note);
-    } else {
-        addNode(note);
+    if (!m_db.transaction()) return;
+    const int savedId = exists ? (updateNoteContent(note) ? note.id() : INVALID_NODE_ID) : addNode(note);
+    QSqlQuery titleFlag(m_db);
+    titleFlag.prepare("DELETE FROM metadata WHERE key = :key");
+    const QString key = "zhkvsky_manual_title_" + QString::number(savedId);
+    titleFlag.bindValue(":key", key);
+    bool ok = savedId != INVALID_NODE_ID && titleFlag.exec();
+    if (ok && note.hasManualTitle()) {
+        titleFlag.prepare("INSERT INTO metadata (key, value) VALUES (:key, 1)");
+        titleFlag.bindValue(":key", key);
+        ok = titleFlag.exec();
     }
+    if (!ok || !m_db.commit()) { m_db.rollback(); return; }
+    if (note.hasManualTitle()) m_manualTitleIds.insert(savedId); else m_manualTitleIds.remove(savedId);
 }
 
 /*!

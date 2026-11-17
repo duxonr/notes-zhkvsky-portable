@@ -324,6 +324,12 @@ void NodeTreeView::selectionChanged(const QItemSelection &selected, const QItemS
         case NodeItem::Type::NoteItem: {
             return;
         }
+        case NodeItem::Type::NoTagItem: {
+            m_isLastSelectedFolder = false;
+            emit saveSelected(false, {}, {NO_TAG_ID});
+            emit loadNotesInTagsRequested({NO_TAG_ID});
+            return;
+        }
         case NodeItem::Type::AllNoteButton: {
             auto folderPath = index.data(NodeItem::Roles::AbsPath).toString();
             m_lastSelectFolder = folderPath;
@@ -443,7 +449,11 @@ void NodeTreeView::dropEvent(QDropEvent *event)
                     if (itemType == NodeItem::Type::FolderItem) {
                         emit moveNodeRequested(nodeId, dropIndex.data(NodeItem::NodeId).toInt());
                         event->acceptProposedAction();
+                    } else if (itemType == NodeItem::Type::NoTagItem) {
+                        emit removeAllTagsRequested(nodeId);
+                        event->acceptProposedAction();
                     } else if (itemType == NodeItem::Type::TagItem) {
+                        event->acceptProposedAction();
                         emit addNoteToTag(nodeId, dropIndex.data(NodeItem::NodeId).toInt());
                     } else if (itemType == NodeItem::Type::TrashButton) {
                         emit moveNodeRequested(nodeId, TRASH_FOLDER_ID);
@@ -628,6 +638,7 @@ void NodeTreeView::mousePressEvent(QMouseEvent *event)
                 }
                 break;
             }
+            case NodeItem::Type::NoTagItem:
             case NodeItem::Type::AllNoteButton:
             case NodeItem::Type::TrashButton: {
                 setCurrentIndexC(index);

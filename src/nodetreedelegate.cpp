@@ -111,6 +111,16 @@ void NodeTreeDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opti
 #endif
 
     painter->fillRect(option.rect, m_currentBackgroundColor);
+    if (itemType == NodeItem::NoTagItem) {
+        paintBackgroundSelectable(painter, option, index);
+        painter->setPen(option.state & QStyle::State_Selected ? m_titleSelectedColor : m_titleColor);
+        painter->setFont(m_titleFont);
+        painter->drawText(option.rect.adjusted(49, 0, -12, 0), Qt::AlignVCenter | Qt::AlignLeft, "NO TAG");
+        painter->setBrush(Qt::NoBrush);
+        painter->drawEllipse(QRectF(option.rect.x()+23, option.rect.center().y()-6, 12, 12));
+        painter->drawLine(option.rect.x()+24,option.rect.center().y()+5,option.rect.x()+34,option.rect.center().y()-5);
+        return;
+    }
     switch (itemType) {
     case NodeItem::Type::RootItem: {
         break;
@@ -332,7 +342,7 @@ QSize NodeTreeDelegate::sizeHint(const QStyleOptionViewItem &option, const QMode
         result.setHeight(NoteTreeConstant::TAG_LABEL_HEIGHT);
     } else if (itemType == NodeItem::Type::FolderItem || itemType == NodeItem::Type::TrashButton || itemType == NodeItem::Type::AllNoteButton) {
         result.setHeight(NoteTreeConstant::FOLDER_ITEM_HEIGHT);
-    } else if (itemType == NodeItem::Type::TagItem) {
+    } else if (itemType == NodeItem::Type::TagItem || itemType == NodeItem::NoTagItem) {
         result.setHeight(NoteTreeConstant::TAG_ITEM_HEIGHT);
     } else {
         result.setHeight(30);

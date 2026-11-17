@@ -22,6 +22,7 @@ public:
         NoteParentName,
         NoteTagListScrollbarPos,
         NoteIsPinned,
+        NoteHasManualTitle,
     };
 
     explicit NoteListModel(QObject *parent = nullptr);

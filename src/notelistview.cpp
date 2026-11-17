@@ -1,3 +1,4 @@
+#include "rowactionbutton.h"
 #include "notelistview.h"
 #include "notelistdelegate.h"
 #include <QDebug>
@@ -253,6 +254,40 @@ void NoteListView::onRowsInserted(const QModelIndexList &rows)
 
 void NoteListView::init()
 {
+    auto *deleteButton = new RowActionButton(RowIcon::Trash, viewport());
+    deleteButton->setObjectName("noteRowDeleteButton");
+    deleteButton->setToolTip(tr("Move note to Trash"));
+    deleteButton->setAccessibleName(tr("Delete note"));
+    deleteButton->setCursor(Qt::PointingHandCursor);
+    deleteButton->setFocusPolicy(Qt::NoFocus);
+    deleteButton->setFixedSize(24,24);
+    deleteButton->hide();
+    connect(deleteButton, &QPushButton::clicked, this, [this,deleteButton] {
+        const QPersistentModelIndex index = deleteButton->property("noteIndex").value<QPersistentModelIndex>();
+        deleteButton->hide();
+        if (index.isValid()) emit deleteNoteByIdRequested(index.data(NoteListModel::NoteID).toInt());
+    });
+    auto *hoverWatch = new QTimer(this);
+    connect(hoverWatch, &QTimer::timeout, this, [this,deleteButton] {
+        const QPoint pos = viewport()->mapFromGlobal(QCursor::pos());
+        const auto index = indexAt(pos);
+        if (!isVisible() || !viewport()->rect().contains(pos) || !index.isValid() || isDragging()
+            || (isPinnedNotesCollapsed() && index.data(NoteListModel::NoteIsPinned).toBool())) {
+            deleteButton->hide(); return;
+        }
+        const auto *delegate = static_cast<NoteListDelegate *>(itemDelegate());
+        const auto *notes = static_cast<NoteListModel *>(model());
+        const QRect row = visualRect(index);
+        const int y = row.top() + delegate->bodyTopOffset(index,*notes) + 10;
+        if (pos.y() < row.top()+delegate->bodyTopOffset(index,*notes)) {deleteButton->hide();return;}
+        deleteButton->setProperty("noteIndex",QVariant::fromValue(QPersistentModelIndex(index)));
+        deleteButton->move(row.right()-43,y-3);
+        auto pal = deleteButton->palette();
+        pal.setColor(QPalette::ButtonText, palette().color(QPalette::Text));
+        deleteButton->setPalette(pal);
+        deleteButton->show();deleteButton->raise();
+    });
+    hoverWatch->start(80);
     setMouseTracking(true);
     setUpdatesEnabled(true);
     viewport()->setAttribute(Qt::WA_Hover);
@@ -635,6 +670,7 @@ void NoteListView::selectionChanged(const QItemSelection &selected, const QItemS
  */
 void NoteListView::setTheme(Theme::Value theme)
 {
+    auto pal = palette(); pal.setColor(QPalette::Text, theme == Theme::Dark ? QColor("#dedede") : QColor("#252525")); setPalette(pal);
     setCSSThemeAndUpdate(this, theme);
 }
 

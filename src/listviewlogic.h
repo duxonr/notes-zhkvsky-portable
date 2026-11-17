@@ -41,6 +41,7 @@ public slots:
     void onSearchEditTextChanged(const QString &keyword);
     void clearSearch(bool createNewNote = false, int scrollToId = INVALID_NODE_ID);
     void onAddTagRequestD(int noteId, int tagId);
+    void onRemoveAllTagsRequest(int noteId);
     void onNoteMovedOut(int nodeId, int targetId);
     void setLastSelectedNote();
     void loadLastSelectedNoteRequested();

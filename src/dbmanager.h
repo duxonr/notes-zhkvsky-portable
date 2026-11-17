@@ -56,6 +56,7 @@ private:
     bool isNodeExist(const NodeData &node);
     QString m_dbpath;
     QSqlDatabase m_db;
+    QSet<int> m_manualTitleIds;
 
     QVector<NodeData> getAllFolders();
     QVector<TagData> getAllTagInfo();
@@ -104,6 +105,7 @@ public slots:
     int addTag(const TagData &tag);
     void addNoteToTag(int noteId, int tagId);
     void removeNoteFromTag(int noteId, int tagId);
+    bool removeAllTagsFromNote(int noteId);
     int nextAvailableNodeId();
     int nextAvailableTagId();
     void renameNode(int id, const QString &newName);
