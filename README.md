@@ -1,103 +1,46 @@
-# Notes
+# Notes ZHKVSKY Portable
 
-[![Discord](https://dcbadge.vercel.app/api/server/RP6ReXRn5j?style=flat)](https://discord.gg/RP6ReXRn5j)
-[![GitHub Actions build status](https://github.com/nuttyartist/notes/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/nuttyartist/notes/actions/workflows/ci.yml?query=branch%3Amaster)
+Windows x64 Portable-версия на базе [официального Notes](https://github.com/nuttyartist/notes).
+Текущая зафиксированная версия форка: **v0.2.0**. Версия исходного приложения: 2.3.1.
 
-Notes is an open source and cross-platform note-taking app that is both beautiful and powerful.
+## Запуск
 
-Website: <a href="https://notes-foss.com" target="_blank">notes-foss.com</a>
+1. Скачайте `Notes_ZHKVSKY_Portable_v0.2.0_Windows_x64.zip` из Releases.
+2. Распакуйте папку целиком в доступное для записи место.
+3. Запустите `Notes.exe`. Установка программы и Qt не нужна.
 
-## Screenshots
+Рядом с программой создаются `Data/notes.db`, `Data/Attachments`, `Data/Thumbnails` и `Settings/Settings.ini`.
+В опубликованном архиве нет пользовательских заметок и настроек.
+Для переноса на другой ПК копируйте всю папку. При обновлении сохраняйте свои `Data` и `Settings`.
+Перед обновлением полностью закройте Notes, включая значок в трее, и сделайте резервную копию.
 
-https://github.com/nuttyartist/notes/assets/16375940/714ffe3e-95ef-4233-b3da-58fcea33fbfa
+## Возможности сборки
 
-https://github.com/nuttyartist/notes/assets/16375940/370439b1-e42b-45c4-a807-0c3657051f97
+- Portable-хранилище и независимый экземпляр для каждой папки программы.
+- Pro/Kanban включены официальной опцией исходной сборки; проверка обновлений отключена.
+- Форматирование, теги, фотокарточки с оригиналами, копированием и перемещением.
+- В callout: Ctrl+Enter продолжает блок, Enter выходит с отступом.
+- Рамка callout намеренно расположена левее общей границы текста: фотокарточка внутри не смещается.
 
-## Features Overview
+Подробности и ограничения: [состояние v0.2.0](docs/releases/v0.2.0.md).
 
-- Native app (written in C++ with Qt).
-- Turn your Markdown tasks into a beautiful Kanban board.
-- Fast and beautiful.
-- Fully open source and cross-platform (Linux, macOS, Windows).
-- Completely private - tracks nothing.
-- Folders and tags. Organize your ideas hierarchically using nested folders and universally using tags.
-- Markdown Support. Format text without lifting your hands from the keyboard.
-- Different themes. Switch between Light, Dark, and Sepia.
-- Feed View. Select multiple notes to see them all one after another in the editor.
-- Always runs in the background. Use the hotkey <kbd>Win</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd> to summon Notes. <kbd>Ctrl</kbd>+<kbd>N</kbd> for macOS.
-- Keyboard shortcuts. Meant to have the option to be used solely with a keyboard (but more work needs to be done on that).
-- What feature will you contribute?
+## Сборка
 
-## Keyboard shortcuts
+Нужны MSVC 2022 x64, Windows SDK, Qt 6.8.3 MSVC 2022 64-bit, CMake и Ninja.
+Команды выполняются в x64 Native Tools Command Prompt:
 
-All keyboard shortcuts are [documented here](docs/keyboard_shortcuts.md).
+```bat
+git clone --recurse-submodules https://github.com/duxonr/notes-zhkvsky-portable.git
+cd notes-zhkvsky-portable
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=C:/Qt/6.8.3/msvc2022_64 -DNOTES_PORTABLE=ON -DPRO_VERSION=ON -DUPDATE_CHECKER=OFF -DGIT_REVISION=OFF
+cmake --build build --parallel 4
+```
 
-## Pro Version
+После сборки скопируйте Notes.exe в отдельную папку и выполните `windeployqt --release --qmldir src <путь-к-Notes.exe>`.
+Используйте windeployqt из той же версии Qt. Из полного source ZIP в Releases submodules уже доступны без отдельной загрузки.
+См. также [оригинальные инструкции Windows](docs/build_on_windows.md).
 
-To support our open source development you can purchase a [Pro Version license](https://notesapp.lemonsqueezy.com/checkout/buy/0e791d1e-9feb-4a67-b05a-f2f07f5c82ad?discount=0) that will allow you to edit inside the Kanban view and receive free Pro version updates for a year. You can also donate money either through [Github Sponsors](https://github.com/sponsors/nuttyartist), or [Patreon](https://www.patreon.com/rubymamis), or put a bounty on specific issues using Bountysource. If you wish, you can access all Pro features at no cost by building the app from source. See "Building from source" below.
+## Происхождение и лицензии
 
-## Building from source
-
-We have specific instructions for [Windows](docs/build_on_windows.md), [macOS](docs/build_on_macos.md) and [Linux](docs/build_on_linux.md) (and we also provide [build options](docs/build_options.md)).
-
-## Database path
-
-The notes database and settings file are stored in:
-
-| OS      | Path                                                                                                                                                  |
-| ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Windows | `%APPDATA%\Awesomeness`                                                                                                                               |
-| Linux   | `~/.config/Awesomeness`<br>`~/snap/notes/current/.config/Awesomeness` (Snap)<br>`~/.var/app/io.github.nuttyartist.notes/config/Awesomeness` (Flatpak) |
-| macOS   | `~/.config/Awesomeness`                                                                                                                               |
-
-## Contributors
-
-### Developers:
-
-Alex Spataru  
-Ali Diouri  
-David Planella  
-Diep Ngoc  
-Guilherme Silva  
-Thorbjørn Lindeijer  
-Tuur Vanhoutte  
-Waqar Ahmed
-
-### Designers:
-
-Kevin Doyle
-
-And to the many of our beloved users who keep sending us feedback, you are an essential force in helping us improve, thank you!
-
-## Roadmap
-
-A sneak peek at what we’re stirring up next.
-
-- Mobile app using the same code base (adaptable app).
-- Replace database with support for arbitrary folder.
-- Our own built-in syncing.
-- Export/import .txt files.
-- Advanced blocks editor.
-- Browser version using Qt for WebAssembly.
-- Much, much more.
-
-## Notes makes use of the following third-party libraries:
-
-- [QMarkdownTextEdit](https://github.com/pbek/qmarkdowntextedit)
-- [QSimpleUpdater](https://github.com/alex-spataru/QSimpleUpdater)
-- [QAutostart](https://github.com/b00f/qautostart)
-- [Qxt](https://bitbucket.org/libqxt/libqxt/src/master/)
-
-## Notes makes use of the following open source fonts:
-
-- Roboto
-- Source Sans Pro
-- Trykker
-- Mate
-- iA Writer Mono
-- iA Writer Duo
-- iA Writer Quattro
-- Font Awesome
-- Material Symbols
-
-[Terms & Privacy policy](https://www.notes-foss.com/notes-app-terms-privacy-policy)
+Сохранены история и авторство upstream Notes, файл [LICENSE](LICENSE) (MPL-2.0), лицензии сторонних компонентов и pinned submodules.
+Оригинальное описание: [Upstream README](docs/UPSTREAM_README.md).

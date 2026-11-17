@@ -1,0 +1,26 @@
+{
+  "release": "v0.2.0",
+  "implementation_commit": "e599750cf23d6172bce9d9d0b16260e675fe2826",
+  "notes_exe_sha256": "b81faa07f45eedc5202c82002185c5fc3d0dc00047d5febe0a868321b4be0725",
+  "qt": "6.8.3",
+  "configuration": {
+    "CMAKE_BUILD_TYPE": "Release",
+    "NOTES_PORTABLE": "ON",
+    "PRO_VERSION": "ON",
+    "UPDATE_CHECKER": "OFF"
+  },
+  "submodules": [
+    {
+      "path": "3rdParty/QSimpleUpdater",
+      "commit": "14c1bef71d26c915eeaa05c988c55bdad98e1d75"
+    },
+    {
+      "path": "3rdParty/qautostart",
+      "commit": "efdb2e5a25e5646390f8658e3321f6e9a4c3561a"
+    },
+    {
+      "path": "3rdParty/qmarkdowntextedit",
+      "commit": "c6420c537e219a7b7685f2bbe5e0862af631d91c"
+    }
+  ]
+}
