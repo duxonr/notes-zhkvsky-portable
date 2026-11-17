@@ -13,6 +13,7 @@
 #include "notelistview.h"
 #include "fontloader.h"
 #include "rowactionbutton.h"
+#include "rowcounterbutton.h"
 
 TagTreeDelegateEditor::TagTreeDelegateEditor(QTreeView *view, const QStyleOptionViewItem &option, const QModelIndex &index, QListView *listView,
                                              QWidget *parent)
@@ -77,11 +78,9 @@ TagTreeDelegateEditor::TagTreeDelegateEditor(QTreeView *view, const QStyleOption
         m_actions.append(button);
     };
     addAction(RowIcon::Palette, tr("Change tag color"), NodeTreeView::RowAction::Color);
-    addAction(RowIcon::Pencil, tr("Rename tag"), NodeTreeView::RowAction::Rename);
     addAction(RowIcon::Trash, tr("Delete tag"), NodeTreeView::RowAction::Delete);
-    m_count = new QLabel(this);
-    m_count->setFixedWidth(32);
-    m_count->setAlignment(Qt::AlignCenter);
+    m_count = new RowCounterButton(this);
+    connect(m_count, &QPushButton::clicked, tree, [tree, index = m_index] { tree->showRowContextMenu(index); });
     layout->addWidget(m_count);
     connect(m_view, &QTreeView::expanded, this, [this](const QModelIndex &) { update(); });
 }
@@ -104,10 +103,10 @@ void TagTreeDelegateEditor::updateDelegate()
     m_label->setText(displayName);
     m_count->setText(QString::number(m_index.data(NodeItem::ChildCount).toInt()));
     const QString color = m_view->selectionModel()->isSelected(m_index) ? "white" : m_titleColor.name();
-    const QString countStyle = "QLabel {color:" + color + ";}";
+    const QString countStyle = "QPushButton {border:0; padding:0; color:" + color + ";}";
     if (m_count->styleSheet() != countStyle) m_count->setStyleSheet(countStyle);
     for (int i = 0; i < m_actions.size(); ++i) {
-        const QString style = "QPushButton {border:0; padding:0; color:" + color + ";} QPushButton:hover {color:" + (i == 2 ? QString("#d34d4d") : QString("#448ac9")) + ";}";
+        const QString style = "QPushButton {border:0; padding:0; color:" + color + ";}";
         if (m_actions[i]->styleSheet() != style) m_actions[i]->setStyleSheet(style);
     }
 

@@ -5,8 +5,12 @@
 Based on upstream Notes 2.3.1 and local v0.1.0. C++/Qt, editor algorithms,
 database schema and the existing move/delete/tag handlers are retained.
 
-* Folder hover controls: create subfolder, inline rename, existing confirmed delete.
-* Tag hover controls: existing palette, inline rename, existing tag removal.
+* Folder hover controls: create subfolder and existing confirmed delete. Rename
+  remains available by double-clicking the name or through the context menu.
+* Tag hover controls: existing palette and existing tag removal. Rename remains
+  available by double-clicking the name or through the context menu.
+* Hovering a folder/tag counter replaces its number with three dots in the same
+  32 px area. Clicking opens the original context menu for that exact row.
 * Action callbacks use persistent model indexes and reject invalid indexes after resets.
 * Fixed 32 px counter column, 8 px right margin, original row heights. Below 160 px
   of row width, actions give space to the title and counter; the context menu remains.
@@ -90,3 +94,20 @@ The initial backup for this task is
 `D:\01_PROJECTS\NOTES_ZHKVSKY\Backups\Notes_C_before_v02_20261117_001149`.
 
 DWM reference: https://learn.microsoft.com/windows/apps/desktop/modernize/apply-windows-themes
+
+## Row-control fixes after v0.2 feedback
+
+The rename icon buttons were removed from both folders and tags. Non-destructive
+action icons retain contrasting text color on hover instead of changing to the
+blue selection background. Only the delete action gains a red hover accent.
+
+The folder color dialog now owns a copy of its persistent index and protects its
+initiating hover editor while the dialog is open. Previously, leaving the tree
+could destroy that editor and invalidate the reference passed to the dialog.
+Deferred cleanup restores hover-only controls after the modal event returns.
+
+Regression checks enter the dialog via an actual icon double-click, send a tree
+leave event and process deferred destruction, accept the chosen color and reload
+it in a separate process. The old implementation failed this reproduction.
+Additional checks cover both counter menus, hover-dot rendering without geometry
+changes, removal of rename buttons, and icon contrast on the selected blue row.

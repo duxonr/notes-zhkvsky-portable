@@ -14,9 +14,16 @@ protected:
     {
         QPainter p(this);
         p.setRenderHint(QPainter::Antialiasing);
+        const QColor baseColor = palette().color(QPalette::ButtonText);
+        if (underMouse()) {
+            p.setPen(Qt::NoPen);
+            p.setBrush(baseColor.lightness() > 128 ? QColor(255,255,255,28) : QColor(0,0,0,16));
+            p.drawRoundedRect(rect().adjusted(1,3,-1,-3), 3, 3);
+        }
         p.translate((width() - 14) / 2.0, (height() - 14) / 2.0);
-        QColor color = palette().color(QPalette::ButtonText);
-        if (underMouse()) color = m_icon == RowIcon::Trash ? QColor("#d34d4d") : QColor("#448ac9");
+        QColor color = baseColor;
+        if (underMouse() && m_icon == RowIcon::Trash)
+            color = baseColor.lightness() > 128 ? QColor("#ffb4ab") : QColor("#c93636");
         p.setPen(QPen(color, 1.3, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
         p.setBrush(Qt::NoBrush);
         switch (m_icon) {

@@ -28,7 +28,8 @@ public:
 
     void setFolderColorSettings(QSettings *settings);
     QColor folderIconColor(const QModelIndex &index) const;
-    void changeFolderIconColor(const QPersistentModelIndex &index);
+    void changeFolderIconColor(QPersistentModelIndex index);
+    void showRowContextMenu(QPersistentModelIndex index);
     enum class RowAction { Select, AddSubfolder, Rename, Delete, Color };
     void triggerRowAction(const QPersistentModelIndex &index, RowAction action);
 

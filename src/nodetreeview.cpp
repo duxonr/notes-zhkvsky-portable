@@ -12,6 +12,7 @@
 #include <QColorDialog>
 #include <QPushButton>
 #include <QLayout>
+#include <QScopedValueRollback>
 #include "nodetreeview_p.h"
 
 NodeTreeView::NodeTreeView(QWidget *parent)
@@ -102,9 +103,12 @@ QColor NodeTreeView::folderIconColor(const QModelIndex &index) const
     return m_folderIconColors.value(index.data(NodeItem::NodeId).toInt());
 }
 
-void NodeTreeView::changeFolderIconColor(const QPersistentModelIndex &index)
+void NodeTreeView::changeFolderIconColor(QPersistentModelIndex index)
 {
     if (!index.isValid() || index.data(NodeItem::ItemType).toInt() != NodeItem::FolderItem || !m_folderColorSettings) return;
+    // A modal dialog moves the pointer out of the tree. Keep its initiating hover
+    // editor alive until the double-click event has returned; own the index too.
+    QScopedValueRollback<bool> editingGuard(m_isEditing, true);
     const int id = index.data(NodeItem::NodeId).toInt();
     QColorDialog dialog(folderIconColor(index).isValid() ? folderIconColor(index) : QColor(68, 138, 201), this);
     dialog.setOption(QColorDialog::DontUseNativeDialog);
@@ -113,7 +117,13 @@ void NodeTreeView::changeFolderIconColor(const QPersistentModelIndex &index)
     dialog.layout()->addWidget(reset);
     bool useThemeColor = false;
     connect(reset, &QPushButton::clicked, &dialog, [&] { useThemeColor = true; dialog.accept(); });
-    if (dialog.exec() != QDialog::Accepted || !index.isValid()) return;
+    const int result = dialog.exec();
+    QTimer::singleShot(0, this, [this] {
+        if (!m_isEditing && !m_isContextMenuOpened
+            && !viewport()->rect().contains(viewport()->mapFromGlobal(QCursor::pos())))
+            closeCurrentEditor();
+    });
+    if (result != QDialog::Accepted || !index.isValid()) return;
     const QString key = "folderIconColors/" + QString::number(id);
     if (useThemeColor) {
         m_folderIconColors.remove(id);
@@ -126,6 +136,15 @@ void NodeTreeView::changeFolderIconColor(const QPersistentModelIndex &index)
     }
     m_folderColorSettings->sync();
     viewport()->update();
+}
+
+void NodeTreeView::showRowContextMenu(QPersistentModelIndex index)
+{
+    if (!index.isValid() || index.model() != model()) return;
+    m_currentEditingIndex = index;
+    if (!selectionModel()->isSelected(index)) setCurrentIndexC(index);
+    const QRect row = visualRect(index);
+    onCustomContextMenu(QPoint(row.right() - 16, row.center().y()));
 }
 
 void NodeTreeView::triggerRowAction(const QPersistentModelIndex &index, RowAction action)

@@ -4,6 +4,15 @@
 #include "treeviewlogic.h"
 #include "foldertreedelegateeditor.h"
 #include "labeledittype.h"
+#include "treefoldericon.h"
+#include <QPointer>
+#include "rowcounterbutton.h"
+#include "rowactionbutton.h"
+#include "tagtreedelegateeditor.h"
+#include <QMenu>
+#include <QAction>
+#include <QProcess>
+#include <QStandardItemModel>
 #include "isolatedtest.h"
 #include <QApplication>
 #include <cstdio>
@@ -38,6 +47,15 @@ int main(int argc, char **argv) {
  qInstallMessageHandler([](QtMsgType,const QMessageLogContext &,const QString &message){fprintf(stderr,"%s\n",qPrintable(message));});
  QApplication app(argc,argv); app.setApplicationVersion("2.3.1");
  if (!validatePortablePaths()) return 2;
+ if(app.arguments().contains("--verify-persisted-color")) {
+   const int at=app.arguments().indexOf("--verify-persisted-color");
+   if(app.arguments().size()<=at+2) return 10;
+   QSettings saved(portableSettings(),QSettings::IniFormat);
+   NodeTreeView colorTree;colorTree.setFolderColorSettings(&saved);
+   QStandardItemModel probe;auto *item=new QStandardItem;
+   item->setData(app.arguments()[at+1].toInt(),NodeItem::NodeId);probe.appendRow(item);
+   return colorTree.folderIconColor(probe.index(0,0))==QColor(app.arguments()[at+2])?0:11;
+ }
  QFontDatabase::addApplicationFont(":/fonts/fontawesome/fa-solid-900.ttf");
  QFontDatabase::addApplicationFont(":/fonts/material/material-symbols-outlined.ttf");
  QFile report(QCoreApplication::applicationDirPath()+"/ui-test-report.txt"); report.open(QIODevice::WriteOnly|QIODevice::Text); QTextStream out(&report);
@@ -78,8 +96,29 @@ int main(int argc, char **argv) {
  tree->triggerRowAction(child,NodeTreeView::RowAction::AddSubfolder); QTest::qWait(100); check(model->rowCount(child)==1,"third level supported");
  hover(parent);
  editor=nullptr;for(auto *e:tree->findChildren<FolderTreeDelegateEditor*>())if(e->isVisible())editor=e;
- QLabel *counter=nullptr;if(editor)for(auto *label:editor->findChildren<QLabel*>())if(label->width()==32)counter=label;
+ RowCounterButton *counter=nullptr;if(editor)for(auto *button:editor->findChildren<QPushButton*>())if(auto *count=dynamic_cast<RowCounterButton*>(button))counter=count;
  check(counter && counter->mapTo(tree->viewport(),counter->rect().center()).x()==tree->viewport()->width()-25,"counter stays in fixed right column");
+ bool hasRenameButton=false;
+ if(editor)for(auto *b:editor->findChildren<QPushButton*>())if(b->toolTip().contains("Rename"))hasRenameButton=true;
+ check(!hasRenameButton,"folder has no rename icon button");
+ if(counter){
+   const QRect beforeRect=counter->geometry();const QImage number=counter->grab().toImage();
+   QEnterEvent enter(QPointF(3,3),QPointF(3,3),QPointF(counter->mapToGlobal(QPoint(3,3))));QApplication::sendEvent(counter,&enter);
+   check(counter->grab().toImage()!=number && counter->geometry()==beforeRect,"counter hover shows dots without moving column");
+   QEvent leave(QEvent::Leave);QApplication::sendEvent(counter,&leave);
+   check(counter->grab().toImage()==number,"counter number returns after hover");
+   bool menuForParent=false,menuHasRename=false;
+   QTimer::singleShot(100,[&]{if(auto *menu=qobject_cast<QMenu*>(app.activePopupWidget())){
+     menuForParent=tree->currentEditingIndex()==parent;
+     for(auto *a:menu->actions())if(a->text()=="Rename Folder")menuHasRename=true;
+     menu->close();
+   }});
+   counter->click();check(menuForParent && menuHasRename,"counter dots open original folder menu for exact row");QTest::qWait(150);
+ }
+ tree->setCurrentIndexC(parent);hover(parent);
+ RowActionButton *hoverButton=nullptr;
+ for(auto *e:tree->findChildren<FolderTreeDelegateEditor*>())if(e->isVisible())for(auto *b:e->findChildren<QPushButton*>())if(b->toolTip()=="Create subfolder")hoverButton=dynamic_cast<RowActionButton*>(b);
+ if(hoverButton){hoverButton->setAttribute(Qt::WA_UnderMouse,true);const QColor ink=hoverButton->grab().toImage().pixelColor(10,13);check(qAbs(ink.red()-68)+qAbs(ink.green()-138)+qAbs(ink.blue()-201)>100,"hovered action remains visible on selected blue row");hoverButton->setAttribute(Qt::WA_UnderMouse,false);}else check(false,"hover action available for contrast check");
  check(tree->visualRect(parent).height()==30 && tree->visualRect(child).height()==30,"row heights unchanged");
  window->findChild<QSplitter*>("splitter")->setSizes({185,250,815});QTest::qWait(100);hover(parent);
  check(tree->visualRect(parent).height()==30,"narrow sidebar retains row height");
@@ -87,7 +126,7 @@ int main(int argc, char **argv) {
  tree->setExpanded(parent,true);QTest::qWait(50);const QPoint arrow=tree->visualRect(parent).topLeft()+QPoint(10,15);
  QTest::mouseClick(tree->viewport(),Qt::LeftButton,Qt::NoModifier,arrow);check(!tree->isExpanded(parent),"arrow single click collapses folder");
  QTest::mouseClick(tree->viewport(),Qt::LeftButton,Qt::NoModifier,arrow);check(tree->isExpanded(parent),"arrow single click expands folder");
- tree->triggerRowAction(parent,NodeTreeView::RowAction::Select);
+ tree->setCurrentIndexC(parent);
  hover(parent);QTest::qWait(100);
  LabelEditType *folderLabel=nullptr;for(auto *label:tree->findChildren<LabelEditType*>())if(label->isVisible())folderLabel=label;
  if(folderLabel)QTest::mouseDClick(folderLabel,Qt::LeftButton);QTest::qWait(100);
@@ -95,12 +134,31 @@ int main(int argc, char **argv) {
  check(rename!=nullptr,"rename uses inline editor"); if(rename){rename->selectAll();QTest::keyClicks(rename,"Parent renamed");QTest::keyClick(rename,Qt::Key_Return);QTest::qWait(100);}
  check(parent.data().toString()=="Parent renamed","rename targets parent");
  const int folderId=parent.data(NodeItem::NodeId).toInt();
- QTimer::singleShot(100,[&]{if(auto *dlg=qobject_cast<QColorDialog*>(app.activeModalWidget())){dlg->setCurrentColor(QColor("#18aa55"));dlg->accept();}});
- tree->changeFolderIconColor(parent);check(tree->folderIconColor(parent)==QColor("#18aa55"),"folder color saved by ID");
+ hover(parent);
+ QPointer<FolderTreeDelegateEditor> colorEditor;
+ TreeFolderIconButton *folderIcon = nullptr;
+ for(auto *e:tree->findChildren<FolderTreeDelegateEditor*>()) if(e->isVisible()) {
+   colorEditor=e;
+   for(auto *button:e->findChildren<QPushButton*>())
+     if(auto *icon=dynamic_cast<TreeFolderIconButton*>(button)) folderIcon=icon;
+ }
+ bool editorSurvivedDialog=false;
+ QTimer::singleShot(100,[&]{if(auto *dlg=qobject_cast<QColorDialog*>(app.activeModalWidget())){
+   QEvent leave(QEvent::Leave);QApplication::sendEvent(tree,&leave);
+   QCoreApplication::sendPostedEvents(nullptr,QEvent::DeferredDelete);
+   editorSurvivedDialog=!colorEditor.isNull();
+   if(!editorSurvivedDialog){dlg->reject();return;}
+   dlg->setCurrentColor(QColor("#18aa55"));dlg->accept();
+ }});
+ if(folderIcon)QTest::mouseDClick(folderIcon,Qt::LeftButton);
+ check(editorSurvivedDialog,"folder editor survives pointer leaving tree during color dialog");
+ check(tree->folderIconColor(parent)==QColor("#18aa55"),"icon double-click saves chosen folder color");
  for(auto theme:{Theme::Dark,Theme::Light,Theme::Sepia}){window->setTheme(theme);QTest::qWait(100);check(tree->folderIconColor(parent)==QColor("#18aa55"),"folder color stable across theme "+QString::number(theme));
   COLORREF value=theme==Theme::Dark ? RGB(25,25,25) : theme==Theme::Sepia ? RGB(251,240,217) : RGB(247,247,247); auto hr=DwmSetWindowAttribute(reinterpret_cast<HWND>(window->winId()),DWMWA_CAPTION_COLOR,&value,sizeof(value));
   check(SUCCEEDED(hr),"DWM caption color accepted "+QString::number(theme));window->grab().save(QCoreApplication::applicationDirPath()+"/theme-"+QString::number(theme)+".png");}
  QSettings persisted(portableSettings(),QSettings::IniFormat); check(persisted.value("folderIconColors/"+QString::number(folderId)).toString()=="#18aa55","folder color persisted in Settings.ini");
+ QProcess colorRestart;colorRestart.start(QCoreApplication::applicationFilePath(),{"--verify-persisted-color",QString::number(folderId),"#18aa55"});
+ check(colorRestart.waitForFinished(10000)&&colorRestart.exitCode()==0,"chosen folder color reloads in a separate process");
  const int childId=child.data(NodeItem::NodeId).toInt();
  QTimer::singleShot(100,[&]{if(auto *dlg=qobject_cast<QColorDialog*>(app.activeModalWidget())){dlg->setCurrentColor(QColor("#18aa55"));dlg->accept();}});tree->changeFolderIconColor(child);
  QMimeData folderMime;folderMime.setData(FOLDER_MIME,child.data(NodeItem::AbsPath).toString().toUtf8());
@@ -119,6 +177,12 @@ int main(int argc, char **argv) {
  QTest::mouseClick(tree->viewport(),Qt::LeftButton,Qt::ControlModifier,tree->visualRect(tags[0]).center());check(tree->selectionModel()->selectedIndexes().size()==2,"Ctrl explicitly selects multiple tags");
  QTest::mouseClick(tree->viewport(),Qt::LeftButton,Qt::NoModifier,tree->visualRect(tags[0]).center());check(tree->selectionModel()->selectedIndexes().size()==1,"plain click clears multiselection");}
 
+ hover(tags[0]);QTest::qWait(100);
+ TagTreeDelegateEditor *tagEditor=nullptr;for(auto *e:tree->findChildren<TagTreeDelegateEditor*>())if(e->isVisible())tagEditor=e;
+ RowCounterButton *tagCounter=nullptr;bool tagHasRename=false;
+ if(tagEditor)for(auto *b:tagEditor->findChildren<QPushButton*>()){if(auto *count=dynamic_cast<RowCounterButton*>(b))tagCounter=count;if(b->toolTip().contains("Rename"))tagHasRename=true;}
+ check(tagEditor && !tagHasRename,"tag has no rename icon button");
+ if(tagCounter){bool tagMenuCorrect=false;QTimer::singleShot(100,[&]{if(auto *menu=qobject_cast<QMenu*>(app.activePopupWidget())){tagMenuCorrect=tree->currentEditingIndex()==tags[0];menu->close();}});tagCounter->click();check(tagMenuCorrect,"counter dots open original menu for exact tag");QTest::qWait(150);}else check(false,"tag counter menu exists");
  if(!tags.isEmpty()) {
    hover(tags[0]);QTest::qWait(100);
    QTimer::singleShot(100,[&]{if(auto *dlg=qobject_cast<QColorDialog*>(app.activeModalWidget())){dlg->setCurrentColor(QColor("#f07020"));dlg->accept();}});

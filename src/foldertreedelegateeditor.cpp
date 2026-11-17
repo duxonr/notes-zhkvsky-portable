@@ -13,6 +13,7 @@
 #include "labeledittype.h"
 #include "fontloader.h"
 #include "rowactionbutton.h"
+#include "rowcounterbutton.h"
 #include "treefoldericon.h"
 
 FolderTreeDelegateEditor::FolderTreeDelegateEditor(QTreeView *view, const QStyleOptionViewItem &option, const QModelIndex &index, QListView *listView,
@@ -114,11 +115,9 @@ FolderTreeDelegateEditor::FolderTreeDelegateEditor(QTreeView *view, const QStyle
         m_actions.append(button);
     };
     addAction(RowIcon::FolderPlus, tr("Create subfolder"), NodeTreeView::RowAction::AddSubfolder);
-    addAction(RowIcon::Pencil, tr("Rename folder"), NodeTreeView::RowAction::Rename);
     addAction(RowIcon::Trash, tr("Delete folder"), NodeTreeView::RowAction::Delete);
-    m_count = new QLabel(this);
-    m_count->setFixedWidth(32);
-    m_count->setAlignment(Qt::AlignCenter);
+    m_count = new RowCounterButton(this);
+    connect(m_count, &QPushButton::clicked, tree, [tree, index = m_index] { tree->showRowContextMenu(index); });
     layout->addWidget(m_count);
     m_expandIcon->installEventFilter(this);
     m_folderIcon->installEventFilter(this);
@@ -156,10 +155,10 @@ void FolderTreeDelegateEditor::updateDelegate()
     m_label->setText(displayName);
     m_count->setText(QString::number(m_index.data(NodeItem::ChildCount).toInt()));
     const QString color = m_view->selectionModel()->isSelected(m_index) ? "white" : m_titleColor.name();
-    const QString countStyle = "QLabel {color:" + color + ";}";
+    const QString countStyle = "QPushButton {border:0; padding:0; color:" + color + ";}";
     if (m_count->styleSheet() != countStyle) m_count->setStyleSheet(countStyle);
     for (int i = 0; i < m_actions.size(); ++i) {
-        const QString style = "QPushButton {border:0; padding:0; color:" + color + ";} QPushButton:hover {color:" + (i == 2 ? QString("#d34d4d") : QString("#448ac9")) + ";}";
+        const QString style = "QPushButton {border:0; padding:0; color:" + color + ";}";
         if (m_actions[i]->styleSheet() != style) m_actions[i]->setStyleSheet(style);
     }
     auto theme = static_cast<NodeTreeView *>(m_view)->theme();

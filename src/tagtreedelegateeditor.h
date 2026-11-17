@@ -10,6 +10,7 @@
 class QTreeView;
 class QPushButton;
 class QLabel;
+class RowCounterButton;
 class PushButtonType;
 class LabelEditType;
 class QListView;
@@ -35,7 +36,7 @@ private:
     QListView *m_listView;
     LabelEditType *m_label;
     QList<QPushButton *> m_actions;
-    QLabel *m_count;
+    RowCounterButton *m_count;
     Theme::Value m_theme;
     void updateDelegate();
 

@@ -11,6 +11,7 @@ class QTreeView;
 class QPushButton;
 class TreeFolderIconButton;
 class QLabel;
+class RowCounterButton;
 class PushButtonType;
 class LabelEditType;
 class QListView;
@@ -41,7 +42,7 @@ private:
     QPixmap m_notExpanded;
     QLabel *m_expandIcon;
     QList<QPushButton *> m_actions;
-    QLabel *m_count;
+    RowCounterButton *m_count;
     Theme::Value m_theme;
     void updateDelegate();
 
