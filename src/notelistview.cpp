@@ -282,9 +282,7 @@ void NoteListView::init()
         if (pos.y() < row.top()+delegate->bodyTopOffset(index,*notes)) {deleteButton->hide();return;}
         deleteButton->setProperty("noteIndex",QVariant::fromValue(QPersistentModelIndex(index)));
         deleteButton->move(row.right()-43,y-3);
-        auto pal = deleteButton->palette();
-        pal.setColor(QPalette::ButtonText, palette().color(QPalette::Text));
-        deleteButton->setPalette(pal);
+        deleteButton->setIconColor(m_actionIconColor);
         deleteButton->show();deleteButton->raise();
     });
     hoverWatch->start(80);
@@ -670,7 +668,7 @@ void NoteListView::selectionChanged(const QItemSelection &selected, const QItemS
  */
 void NoteListView::setTheme(Theme::Value theme)
 {
-    auto pal = palette(); pal.setColor(QPalette::Text, theme == Theme::Dark ? QColor("#dedede") : QColor("#252525")); setPalette(pal);
+    m_actionIconColor = theme == Theme::Dark ? QColor("#dedede") : QColor("#252525");
     setCSSThemeAndUpdate(this, theme);
 }
 

@@ -50,6 +50,7 @@ signals:
 
 private:
     int tagListTop(const QModelIndex &index) const;
+    void layoutTagDots(const QModelIndex &index);
     void paintBackground(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const;
     void paintLabels(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const;
     void paintSeparator(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const;

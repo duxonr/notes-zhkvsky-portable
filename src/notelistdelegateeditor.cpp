@@ -65,14 +65,18 @@ NoteListDelegateEditor::NoteListDelegateEditor(const NoteListDelegate *delegate,
     setContentsMargins(0, 0, 0, 0);
     m_folderIcon = QImage(":/images/folder.png");
     m_tagListView = new TagListView(this);
+    m_tagListView->setObjectName("noteTagDots");
     m_tagListModel = new TagListModel(this);
     m_tagListDelegate = new TagListDelegate(this);
+    m_tagListDelegate->setDotsOnly(true);
+    m_tagListView->setSpacing(0);
+    m_tagListView->setGridSize(QSize(16,16));
     m_tagListView->setFrameStyle(QFrame::NoFrame);
     m_tagListView->setModel(m_tagListModel);
     m_tagListView->setItemDelegate(m_tagListDelegate);
     m_tagListModel->setTagPool(tagPool);
     m_tagListModel->setModelData(index.data(NoteListModel::NoteTagsList).value<QSet<int>>());
-    m_tagListView->setGeometry(note_list_constants::LEFT_OFFSET_X - 5, tagListTop(index), rect().width() - 15, m_tagListView->height());
+    layoutTagDots(index);
     connect(m_tagListView->verticalScrollBar(), &QScrollBar::valueChanged, this, [this] {
         auto idx = static_cast<NoteListModel *>(m_view->model())->getNoteIndex(m_id);
         static_cast<NoteListModel *>(m_view->model())->setData(idx, getScrollBarPos(), NoteListModel::NoteTagListScrollbarPos);
@@ -89,7 +93,7 @@ NoteListDelegateEditor::NoteListDelegateEditor(const NoteListDelegate *delegate,
 
 int NoteListDelegateEditor::tagListTop(const QModelIndex &index) const
 {
-    int top = m_delegate->minimumContentHeight() + m_delegate->folderLineHeight() + note_list_constants::DESC_TAGS_SPACE;
+    int top = m_delegate->minimumContentHeight() - QFontMetrics(m_dateFont).height();
 
     auto const *noteListModel = static_cast<NoteListModel *>(m_view->model());
     if (noteListModel != nullptr) {
@@ -100,6 +104,14 @@ int NoteListDelegateEditor::tagListTop(const QModelIndex &index) const
     }
 
     return top;
+}
+
+void NoteListDelegateEditor::layoutTagDots(const QModelIndex &index)
+{
+    const int dotsWidth = note_row::dotColumnWidth(width(), m_tagListModel->rowCount());
+    const int columns = qMax(1, (dotsWidth-2) / 16);
+    m_tagListView->setVerticalScrollBarPolicy(m_tagListModel->rowCount() > columns * 5 ? Qt::ScrollBarAsNeeded : Qt::ScrollBarAlwaysOff);
+    m_tagListView->setGeometry(width()-20-dotsWidth, tagListTop(index), dotsWidth, m_tagListView->height());
 }
 
 NoteListDelegateEditor::~NoteListDelegateEditor()
@@ -330,7 +342,7 @@ void NoteListDelegateEditor::resizeEvent(QResizeEvent *event)
     QWidget::resizeEvent(event);
     auto const *noteListModel = static_cast<NoteListModel *>(m_view->model());
     auto const idx = noteListModel->getNoteIndex(m_id);
-    m_tagListView->setGeometry(note_list_constants::LEFT_OFFSET_X - 5, tagListTop(idx), rect().width() - 15, m_tagListView->height());
+    layoutTagDots(idx);
     recalculateSize();
 }
 
@@ -379,8 +391,10 @@ void NoteListDelegateEditor::recalculateSize()
     auto const *model = static_cast<NoteListModel *>(m_view->model());
     auto idx = model->getNoteIndex(m_id);
     if (!idx.isValid()) return;
-    int height = tagListTop(idx) + m_tagListView->height() + note_list_constants::LAST_EL_SEP_SPACE;
-    if (m_tagListModel->rowCount() == 0) height -= note_list_constants::DESC_TAGS_SPACE;
+    const int bodyTop = m_delegate->bodyTopOffset(idx, *model);
+    const int contentBottom = bodyTop + m_delegate->minimumRowHeight();
+    const int dotsBottom = tagListTop(idx) + m_tagListView->height() + note_list_constants::LAST_EL_SEP_SPACE;
+    int height = qMax(contentBottom, dotsBottom);
     if (m_view->isPinnedNotesCollapsed() && idx.data(NoteListModel::NoteIsPinned).toBool())
         height = NoteListDelegate::sectionHeaderHeight(idx, *model);
     emit updateSizeHint(m_id, QSize(width(), height), idx);

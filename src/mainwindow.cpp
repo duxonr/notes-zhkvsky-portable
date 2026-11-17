@@ -1677,7 +1677,7 @@ void MainWindow::setupModelView()
     noteTitle->setMinimumHeight(42);
     QFont headingFont(m_displayFont, 15, QFont::DemiBold);
     noteTitle->setFont(headingFont);
-    noteTitle->setStyleSheet("QLineEdit { background: transparent; border: none; border-bottom: 1px solid #448ac9; padding: 5px 20px; margin: 0px 20px 6px 20px; }");
+    noteTitle->setStyleSheet("QLineEdit { background: transparent; border: none; border-bottom: 1px solid rgba(128, 128, 128, 90); padding: 5px 20px; margin: 0px 20px 6px 20px; }");
     noteTitle->setProperty("baseStyle", noteTitle->styleSheet());
     int titlePosition = m_ui->verticalLayout_textEdit->indexOf(m_textEdit);
 #if QT_VERSION >= QT_VERSION_CHECK(6, 2, 0)

@@ -30,6 +30,12 @@ void TagListDelegate::paint(QPainter *painter, const QStyleOptionViewItem &optio
     auto color = index.data(static_cast<int>(TagListModel::TagListRole::ColorRole)).toString();
 
     auto rect = option.rect;
+    if (m_dotsOnly) {
+        painter->setPen(Qt::NoPen);
+        painter->setBrush(QColor(color));
+        painter->drawEllipse(QRectF(rect.center().x()-5, rect.center().y()-5, 10, 10));
+        return;
+    }
     rect.setHeight(20);
     QPainterPath path;
     path.addRoundedRect(rect, 10, 10);
@@ -59,6 +65,7 @@ void TagListDelegate::paint(QPainter *painter, const QStyleOptionViewItem &optio
 QSize TagListDelegate::sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const
 {
     Q_UNUSED(option);
+    if (m_dotsOnly) return QSize(16, 16);
     QSize size;
     size.setHeight(20);
     auto name = index.data(static_cast<int>(TagListModel::TagListRole::NameRole)).toString();

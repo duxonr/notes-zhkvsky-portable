@@ -856,7 +856,7 @@ QString NoteEditorLogic::getNoteDateEditor(const QString &dateEdited)
     QDateTime dateTimeEdited(getQDateTime(dateEdited));
     QLocale usLocale(QLocale(QStringLiteral("en_US")));
 
-    return usLocale.toString(dateTimeEdited, QStringLiteral("MMMM d, yyyy, h:mm A"));
+    return usLocale.toString(dateTimeEdited, QStringLiteral("MMMM d, yyyy, HH:mm"));
 }
 
 void NoteEditorLogic::highlightSearch() const

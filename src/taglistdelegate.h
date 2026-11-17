@@ -15,8 +15,10 @@ public:
     void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override;
     QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override;
     void setTheme(Theme::Value theme);
+    void setDotsOnly(bool dotsOnly) { m_dotsOnly = dotsOnly; }
 
 private:
+    bool m_dotsOnly = false;
     QString m_displayFont;
     QFont m_titleFont;
     QFont m_titleSelectedFont;

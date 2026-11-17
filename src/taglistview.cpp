@@ -34,7 +34,8 @@ void TagListView::setBackground(const QColor color)
                                     R"(QScrollBar {margin: 0; background: transparent;} )"
                                     R"(QScrollBar:hover { background-color: rgb(217, 217, 217);})"
                                     R"(QScrollBar::add-line:vertical { width:0px; height: 0px; subcontrol-position: bottom; subcontrol-origin: margin; }  )"
-                                    R"(QScrollBar::sub-line:vertical { width:0px; height: 0px; subcontrol-position: top; subcontrol-origin: margin; })");
+                                    R"(QScrollBar::sub-line:vertical { width:0px; height: 0px; subcontrol-position: top; subcontrol-origin: margin; })"
+                                    R"(QListView#noteTagDots { background: transparent; border: none; padding: 0px; margin: 0px; })");
         setStyleSheet(ss.arg(m_backgroundColor.name()));
     }
 }

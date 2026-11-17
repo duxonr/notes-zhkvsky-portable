@@ -9,12 +9,13 @@ class RowActionButton : public QPushButton
 {
 public:
     RowActionButton(RowIcon icon, QWidget *parent) : QPushButton(parent), m_icon(icon) { }
+    void setIconColor(const QColor &color) { if (m_iconColor != color) { m_iconColor = color; update(); } }
 protected:
     void paintEvent(QPaintEvent *) override
     {
         QPainter p(this);
         p.setRenderHint(QPainter::Antialiasing);
-        const QColor baseColor = palette().color(QPalette::ButtonText);
+        const QColor baseColor = m_iconColor.isValid() ? m_iconColor : palette().color(QPalette::ButtonText);
         if (underMouse()) {
             p.setPen(Qt::NoPen);
             p.setBrush(baseColor.lightness() > 128 ? QColor(255,255,255,28) : QColor(0,0,0,16));
@@ -53,4 +54,5 @@ protected:
     }
 private:
     RowIcon m_icon;
+    QColor m_iconColor;
 };

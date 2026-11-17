@@ -32,7 +32,7 @@ inline QString parseDateTime(const QDateTime &dateTime)
     auto currDateTime = QDateTime::currentDateTime();
 
     if (dateTime.date() == currDateTime.date()) {
-        return usLocale.toString(dateTime.time(), "h:mm A");
+        return usLocale.toString(dateTime.time(), "HH:mm");
     }
     if (dateTime.daysTo(currDateTime) == 1) {
         return "Yesterday";

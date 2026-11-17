@@ -84,6 +84,7 @@ signals:
     void noteListViewClicked();
 
 private:
+    QColor m_actionIconColor = QColor("#252525");
     bool m_isScrollBarHidden;
     bool m_animationEnabled;
     bool m_isMousePressed;

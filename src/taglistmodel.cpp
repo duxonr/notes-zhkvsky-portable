@@ -55,6 +55,7 @@ QVariant TagListModel::data(const QModelIndex &index, int role) const
         return {};
     }
     const TagData &tag = m_data[index.row()];
+    if (role == Qt::ToolTipRole) return tag.name();
     switch (static_cast<TagListRole>(role)) {
     case TagListRole::IdRole:
         return tag.id();

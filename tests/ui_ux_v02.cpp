@@ -1,3 +1,9 @@
+#include <QElapsedTimer>
+#include "noteeditorlogic.h"
+#include "taglistdelegate.h"
+#include "taglistmodel.h"
+#include "noterowlayout.h"
+#include "utils.h"
 #include "notelistdelegateeditor.h"
 #include "notelistdelegate.h"
 #include "taglistview.h"
@@ -80,10 +86,25 @@ int main(int argc, char **argv) {
  out<<"SUBFOLDER_GLYPH="<<QRawFont::fromFont(QFont("Material Symbols Outlined",12)).supportsCharacter(uint(0xe2c8))<<"\n";out.flush();
  int fails=0; auto check=[&](bool ok,const QString &name){out<<(ok?"PASS ":"FAIL ")<<name<<'\n';out.flush(); if(!ok)++fails;};
  if(app.arguments().contains("--feedback-only")){QSettings startSettings(portableSettings(),QSettings::IniFormat);startSettings.setValue("theme","Dark");startSettings.sync();}
+ const auto clockProbe=QDateTime(QDate::currentDate(),QTime(15,4));
+ check(utils::parseDateTime(clockProbe)=="15:04","list time uses 24-hour HH:mm");
+ const auto editorClock=NoteEditorLogic::getNoteDateEditor(clockProbe.toString(Qt::ISODate));
+ check(editorClock.endsWith("15:04") && !editorClock.contains("PM"),"editor time uses 24-hour HH:mm");
  MainWindow *window=new MainWindow; window->resize(1250,800); window->show();window->raise();window->activateWindow(); QTest::qWait(1200);
  auto *tree=window->findChild<NodeTreeView*>("treeView"); auto *model=qobject_cast<NodeTreeModel*>(tree->model()); auto *logic=window->findChild<TreeViewLogic*>();
  if(!tree||!model||!logic) return 3;
  window->findChild<QSplitter*>("splitter")->setSizes({300,250,700}); QTest::qWait(100);
+ if(app.arguments().contains("--card-only")) {
+   QMetaObject::invokeMethod(logic,"onAddTagRequested");QMetaObject::invokeMethod(logic,"onAddTagRequested");QTest::qWait(150);
+   tree->setCurrentIndexC(model->getAllNotesButtonIndex());QTest::qWait(150);window->findChild<QPushButton*>("newNoteButton")->click();QTest::qWait(350);
+   window->findChild<QTextEdit*>("textEdit")->insertPlainText("Tag row probe");QTest::qWait(300);
+   auto *l=window->findChild<NoteListView*>("listView");const int id=l->currentIndex().data(NoteListModel::NoteID).toInt();
+   for(int row=0;row<model->rowCount(model->rootIndex());++row){auto ix=model->index(row,0,model->rootIndex());if(ix.data(NodeItem::ItemType).toInt()==NodeItem::TagItem)tree->addNoteToTag(id,ix.data(NodeItem::NodeId).toInt());}QTest::qWait(300);
+   auto *c=qobject_cast<NoteListDelegateEditor*>(l->indexWidget(l->currentIndex()));auto *v=c?c->findChild<TagListView*>():nullptr;
+   if(v){auto a=v->visualRect(v->model()->index(0,0)),b=v->visualRect(v->model()->index(1,0));out<<"GEOMETRY view="<<v->width()<<"x"<<v->height()<<" viewport="<<v->viewport()->width()<<"x"<<v->viewport()->height()<<" items="<<a.x()<<","<<a.y()<<","<<a.width()<<","<<a.height()<<" / "<<b.x()<<","<<b.y()<<","<<b.width()<<","<<b.height()<<" frame="<<v->frameWidth()<<" spacing="<<v->spacing()<<"\n";
+     check(a.y()==b.y(),"two dot items share horizontal row");}
+   out<<"FAILURES="<<fails<<"\n";out.flush();QMetaObject::invokeMethod(window,"quitApplication",Qt::DirectConnection);return fails?1:0;
+ }
  if(app.arguments().contains("--feedback-only")) {
    tree->setCurrentIndexC(model->getAllNotesButtonIndex());QTest::qWait(100);
    window->findChild<QPushButton*>("newNoteButton")->click();QTest::qWait(300);
@@ -104,10 +125,10 @@ int main(int argc, char **argv) {
    check(hasVisibleText(true),"automatic heading placeholder visible in dark theme");title->setText(saved);
    auto noTag=model->tagIndexFromId(NO_TAG_ID);tree->scrollTo(noTag);QTest::qWait(100);
    const auto pixel=[&]{return tree->viewport()->grab().toImage().pixelColor(tree->visualRect(noTag).left()+8,tree->visualRect(noTag).center().y());};
-   QCursor::setPos(window->mapToGlobal(QPoint(window->width()-50,window->height()-50)));QEvent leave(QEvent::Leave);QApplication::sendEvent(tree,&leave);QTest::qWait(60);const QColor idle=pixel();
-   QPoint pos=tree->visualRect(noTag).center();QCursor::setPos(tree->viewport()->mapToGlobal(pos));QTest::mouseMove(tree->viewport(),pos);QTest::qWait(60);const QColor hovered=pixel();
+   QCursor::setPos(window->mapToGlobal(QPoint(window->width()-50,window->height()-50)));QEvent leave(QEvent::Leave);QApplication::sendEvent(tree->viewport(),&leave);QApplication::sendEvent(tree,&leave);const QColor idle=pixel();
+   QPoint pos=tree->visualRect(noTag).center();QMouseEvent hoverEvent(QEvent::MouseMove,QPointF(pos),QPointF(tree->viewport()->mapToGlobal(pos)),Qt::NoButton,Qt::NoButton,Qt::NoModifier);QApplication::sendEvent(tree->viewport(),&hoverEvent);const QColor hovered=pixel();
    check(hovered!=idle,"NO TAG paints hover background");
-   QCursor::setPos(window->mapToGlobal(QPoint(window->width()-50,window->height()-50)));QApplication::sendEvent(tree,&leave);QTest::qWait(60);
+   QCursor::setPos(window->mapToGlobal(QPoint(window->width()-50,window->height()-50)));QApplication::sendEvent(tree->viewport(),&leave);QApplication::sendEvent(tree,&leave);
    check(pixel()==idle,"NO TAG clears hover on leave");
    QMimeData mime;mime.setData(NOTE_MIME,"999999");QDragEnterEvent enter(pos,Qt::MoveAction,&mime,Qt::LeftButton,Qt::NoModifier);QApplication::sendEvent(tree->viewport(),&enter);
    QDragMoveEvent move(pos,Qt::MoveAction,&mime,Qt::LeftButton,Qt::NoModifier);QApplication::sendEvent(tree->viewport(),&move);QTest::qWait(60);
@@ -285,12 +306,22 @@ int main(int argc, char **argv) {
  const auto tagged=listModel->getNoteIndex(noteIds[0]);
  auto *card=qobject_cast<NoteListDelegateEditor*>(list->indexWidget(tagged));
  auto *chips=card?card->findChild<TagListView*>():nullptr;
- check(chips && chips->height()>0 && chips->height()<40,"two tags occupy one compact row");
- check(card && chips && card->height()-chips->geometry().bottom()<=14,"no empty area below tag chips");
+ check(chips && chips->height()>0 && chips->height()<=18 && chips->visualRect(chips->model()->index(0,0)).y()==chips->visualRect(chips->model()->index(1,0)).y(),"two tag dots occupy the same horizontal row");
+ const auto *rowDelegate=static_cast<NoteListDelegate*>(list->itemDelegate());
+ const auto fitsCard=[&](NoteListDelegateEditor *c,TagListView *v,const QModelIndex &ix){return c && v && c->height()==qMax(rowDelegate->minimumRowHeight()+rowDelegate->bodyTopOffset(ix,*listModel),v->geometry().bottom()+1+note_list_constants::LAST_EL_SEP_SPACE);};
+ check(fitsCard(card,chips,tagged),"card height follows text and right-side dots without extra gap");
+ check(card && chips && chips->x()>=card->width()-20-note_row::metadataWidth(card->width()) && chips->geometry().right()==card->width()-21,"tag dots right aligned under date and delete");
+ check(chips && chips->y()<rowDelegate->minimumContentHeight()+rowDelegate->bodyTopOffset(tagged,*listModel),"tag dots start beside preview below date");
+ if(chips){
+   auto ix=chips->model()->index(0,0);QStyleOptionViewItem opt;opt.rect=QRect(0,0,16,16);
+   QImage dot(16,16,QImage::Format_ARGB32_Premultiplied);dot.fill(Qt::transparent);QPainter p(&dot);chips->itemDelegate()->paint(&p,opt,ix);p.end();
+   check(chips->itemDelegate()->sizeHint(opt,ix)==QSize(16,16) && dot.pixelColor(8,8)==QColor(ix.data(int(TagListModel::TagListRole::ColorRole)).toString()) && dot.pixelColor(0,0).alpha()==0,"tag renderer shows only a circle in its actual color");
+   check(!ix.data(Qt::ToolTipRole).toString().isEmpty(),"tag name available as tooltip");
+ }
  for(int extra=0;extra<19;++extra)QMetaObject::invokeMethod(logic,"onAddTagRequested");QTest::qWait(250);
  for(int row=0;row<model->rowCount(model->rootIndex());++row){auto ix=model->index(row,0,model->rootIndex());if(ix.data(NodeItem::ItemType).toInt()==NodeItem::TagItem)tree->addNoteToTag(noteIds[0],ix.data(NodeItem::NodeId).toInt());}
  QTest::qWait(500);card=qobject_cast<NoteListDelegateEditor*>(list->indexWidget(listModel->getNoteIndex(noteIds[0])));chips=card?card->findChild<TagListView*>():nullptr;
- check(chips && chips->model()->rowCount()==21 && chips->height()<=80 && card->height()-chips->geometry().bottom()<=14,"21 tags wrap with bounded height and no trailing gap");
+ check(chips && chips->model()->rowCount()==21 && chips->height()<=80 && fitsCard(card,chips,listModel->getNoteIndex(noteIds[0])),"21 tags wrap with bounded height and no trailing gap");
  const QString bodyBefore=listModel->getNote(listModel->getNoteIndex(noteIds[0])).content();
  check(dropNotes({noteIds[0],noteIds[1]},noTag),"NO TAG accepts multiple-note drop");
  QSqlQuery cleared(db);cleared.prepare("select count(*) from tag_relationship where node_id in (?,?)");cleared.addBindValue(noteIds[0]);cleared.addBindValue(noteIds[1]);
@@ -300,13 +331,15 @@ int main(int argc, char **argv) {
  bool onlyUntagged=true;for(int row=0;row<listModel->rowCount();++row)onlyUntagged &= listModel->getNote(listModel->index(row,0)).tagIds().isEmpty();
  check(onlyUntagged && listModel->rowCount()>=3,"NO TAG selects untagged notes");
  tree->setCurrentIndexC(model->getAllNotesButtonIndex());QTest::qWait(300);
- window->findChild<QPushButton*>("newNoteButton")->click();QTest::qWait(250);text->insertPlainText("Delete button probe");QTest::qWait(350);
+ window->setTheme(Theme::Dark);QTest::qWait(100);window->findChild<QPushButton*>("newNoteButton")->click();QTest::qWait(250);text->insertPlainText("Delete button probe");QTest::qWait(350);
  const auto deleteIndex=list->currentIndex();const int deleteId=deleteIndex.data(NoteListModel::NoteID).toInt();
  const QRect deleteRow=list->visualRect(deleteIndex);QCursor::setPos(list->viewport()->mapToGlobal(deleteRow.center()));QTest::qWait(180);
  auto *deleteButton=list->findChild<QPushButton*>("noteRowDeleteButton");
  check(deleteButton && deleteButton->isVisible() && deleteButton->property("noteIndex").value<QPersistentModelIndex>()==deleteIndex,"hover delete targets exact note");
  check(deleteButton && deleteButton->y()>=deleteRow.top() && deleteButton->y()<deleteRow.top()+32,"delete button shares title/date line");
+ if(deleteButton){auto image=window->grab(QRect(deleteButton->mapTo(window,QPoint()),deleteButton->size())).toImage();int visible=0;for(int y=3;y<21;++y)for(int x=3;x<21;++x)if(image.pixelColor(x,y).lightness()>150)++visible;check(visible>10 && visible<200,"delete icon renders light strokes on dark background");}
  if(deleteButton)deleteButton->click();QTest::qWait(350);
+ QElapsedTimer deleteWait;deleteWait.start();while(deleteWait.elapsed()<3000 && (listModel->getNoteIndex(deleteId).isValid() || !assertParent(deleteId,TRASH_FOLDER_ID)))QTest::qWait(20);
  check(assertParent(deleteId,TRASH_FOLDER_ID) && !listModel->getNoteIndex(deleteId).isValid(),"hover delete moves note to Trash through existing handler");
  window->findChild<QPushButton*>("newNoteButton")->click();QTest::qWait(700);
  const int emptyId=list->currentIndex().data(NoteListModel::NoteID).toInt();QCursor::setPos(list->viewport()->mapToGlobal(list->visualRect(list->currentIndex()).center()));QTest::qWait(180);
