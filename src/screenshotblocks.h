@@ -51,6 +51,9 @@ public:
     QJsonObject metadata(const QTextCursor &) const;
     void removeCard(QTextCursor);
     void editCard(QTextCursor, bool description);
+    void editDescriptionInline(QTextCursor);
+    void moveCard(QTextCursor, int destination);
+    static QString displayTitle(const QJsonObject &);
     void copyImage(const QTextCursor &);
     void copyDescription(const QTextCursor &);
     bool descriptionOverflows(const QString &, qreal width) const;
@@ -81,6 +84,9 @@ private:
     QPointer<QLabel> m_notice;
     QPointer<QFrame> m_popup;
     QPointer<QLineEdit> m_title;
+    QPointer<QTextEdit> m_inlineDescription;
+    QTextCursor m_dragCursor;
+    QPoint m_dragStart;
     QTextCursor m_editCursor;
     QColor m_foreground{26,26,26};
     Theme::Value m_theme = Theme::Light;

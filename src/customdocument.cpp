@@ -53,6 +53,10 @@ bool CustomDocument::eventFilter(QObject *obj, QEvent *event)
             return true;
         }
     }
+    if((obj==viewport()||obj==this) && event->type()==QEvent::HoverMove){
+        auto pos=static_cast<QHoverEvent*>(event)->position();if(obj==this)pos=viewport()->mapFrom(this,pos.toPoint());QMouseEvent move(QEvent::MouseMove,pos,QPointF(viewport()->mapToGlobal(pos.toPoint())),Qt::NoButton,Qt::NoButton,Qt::NoModifier);
+        if(m_screenshots->handleMouse(&move))return true;
+    }
     // qDebug() << event->type();
 
     if (event->type() == QEvent::HoverMove) {

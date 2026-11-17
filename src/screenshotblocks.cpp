@@ -29,6 +29,7 @@
 #include <QMimeData>
 #include <QBuffer>
 #include <QTimer>
+#include <QApplication>
 
 namespace {
 const QString prefix = QStringLiteral("[!notes-screenshot:v1:");
@@ -176,24 +177,25 @@ QRect ScreenshotBlocks::cardRect(const QTextCursor &cursor) const {
 void ScreenshotBlocks::drawObject(QPainter *p,const QRectF &rect,QTextDocument *,int position,const QTextFormat &format) {
     auto o=QJsonDocument::fromJson(format.property(Metadata).toByteArray()).object();if(!valid(o))return;
     const QString id=o["original"].toString();const bool hover=rect.translated(0,-m_editor->verticalScrollBar()->value()).contains(m_editor->viewport()->mapFromGlobal(QCursor::pos()));
-    p->save();QRectF r=rect.adjusted(0,2,0,-2);p->setPen(Qt::NoPen);p->setBrush(surface(hover));p->drawRoundedRect(r,4,4);
+    p->save();QRectF r=rect.adjusted(0,2,0,-2);p->setPen(QPen(m_theme==Theme::Dark?QColor("#53575c"):QColor("#a5a5a5"),1));p->setBrush(Qt::NoBrush);p->drawRoundedRect(r.adjusted(.5,.5,-.5,-.5),4,4);
     const QRectF preview(r.left()+8,r.top()+8,qMin(120.0,r.width()*.25),80);
     if(auto image=m_thumbnails.object(id)){auto size=image->size().scaled(preview.size().toSize(),Qt::KeepAspectRatio);p->drawImage(QRectF(preview.center()-QPointF(size.width()/2.0,size.height()/2.0),size),*image);}
     else {p->setPen(m_foreground);p->drawText(preview,Qt::AlignCenter,m_missing.contains(id)?tr("Нет файла\nВосстановить"):tr("Загрузка…"));requestThumbnail(o);}
     auto font=m_editor->font();font.setPointSizeF(qMin(12.0,font.pointSizeF()>0?font.pointSizeF():11.0));font.setWeight(QFont::DemiBold);p->setFont(font);
     QRectF title(preview.right()+12,r.top()+10,qMax(24.0,r.right()-preview.right()-104),24);
     p->setPen(o["title"].toString().isEmpty()?QColor(m_foreground.red(),m_foreground.green(),m_foreground.blue(),145):m_foreground);
-    p->drawText(title,Qt::AlignVCenter,QFontMetrics(font).elidedText(o["title"].toString().isEmpty()?tr("Название скриншота"):o["title"].toString(),Qt::ElideRight,int(title.width())));
+    p->drawText(title,Qt::AlignVCenter,QFontMetrics(font).elidedText(displayTitle(o).isEmpty()?tr("Название скриншота"):displayTitle(o),Qt::ElideRight,int(title.width())));
     font.setWeight(QFont::Normal);p->setFont(font);p->setPen(QColor(m_foreground.red(),m_foreground.green(),m_foreground.blue(),160));
     const auto description=o["description"].toString();bool overflow=false;auto summary=twoLines(description,font,title.width(),&overflow);
-    p->drawText(QRectF(title.left(),title.bottom()+3,title.width(),48),Qt::AlignLeft|Qt::AlignTop,description.isEmpty()?tr("Описание"):summary);
-    if(overflow)p->drawText(QRectF(r.right()-28,r.bottom()-29,24,24),Qt::AlignCenter,QStringLiteral("⌄"));
+    if(!m_inlineDescription || m_editCursor.selectionStart()!=position)p->drawText(QRectF(title.left(),title.bottom()+3,title.width(),48),Qt::AlignLeft|Qt::AlignTop,description.isEmpty()?tr("Описание"):summary);
+    if(hover || overflow)p->drawText(QRectF(r.right()-28,r.bottom()-29,24,24),Qt::AlignCenter,QStringLiteral("⌄"));
+    if(hover){p->setPen(QPen(m_foreground,1.3));for(int y=0;y<3;++y)for(int x=0;x<2;++x)p->drawPoint(QPointF(r.left()+3+x*3,r.top()+36+y*5));}
     QTextCursor c(m_editor->document());c.setPosition(position);
     if(hover || m_editor->textCursor().selectionStart()<=position && m_editor->textCursor().selectionEnd()>position){
         const QRectF button(r.right()-28,r.top()+5,24,24);
         p->setFont(QFont("Font Awesome 6 Free Solid",10));
         p->setPen(button.translated(0,-m_editor->verticalScrollBar()->value()).contains(m_editor->viewport()->mapFromGlobal(QCursor::pos()))?QColor("#d16c6c"):m_foreground);
-        p->drawText(button,Qt::AlignCenter,QString(QChar(0xf1f8)));}
+        const QPointF origin(button.center().x()-7,button.center().y()-7);p->save();p->translate(origin);p->setPen(QPen(p->pen().color(),1.3,Qt::SolidLine,Qt::RoundCap,Qt::RoundJoin));p->setBrush(Qt::NoBrush);p->drawLine(2,3,12,3);p->drawLine(5,1,9,1);p->drawRect(QRectF(3.5,4,7,8));p->drawLine(6,6,6,10);p->drawLine(8,6,8,10);p->restore();}
     if(hover || m_editor->textCursor().selectionStart()<=position && m_editor->textCursor().selectionEnd()>position){
         p->setFont(QFont("Font Awesome 6 Free Solid",10));p->setPen(m_foreground);
         QRectF imageButton(r.right()-80,r.top()+10,13,12);p->setBrush(Qt::NoBrush);p->drawRect(imageButton.translated(3,-3));p->drawRect(imageButton);p->drawLine(imageButton.bottomLeft()+QPointF(2,-2),imageButton.center());p->drawLine(imageButton.center(),imageButton.bottomRight()+QPointF(-2,-2));
@@ -239,10 +241,11 @@ void ScreenshotBlocks::insertImage(const QImage &image,const QString &file) {
     startJob(o,image,file,true);
     closeEditor();auto c=m_editor->textCursor();c.beginEditBlock();c.removeSelectedText();
     if(c.positionInBlock()!=0)c.insertBlock(QTextBlockFormat(),QTextCharFormat());
-    c.insertText(QString(QChar::ObjectReplacementCharacter),objectFormat(o));c.insertBlock(QTextBlockFormat(),QTextCharFormat());c.endEditBlock();m_editor->setTextCursor(c);
+    const int objectPosition=c.position();c.insertText(QString(QChar::ObjectReplacementCharacter),objectFormat(o));c.insertBlock(QTextBlockFormat(),QTextCharFormat());c.endEditBlock();m_editor->setTextCursor(c);
+    QTextCursor inserted(m_editor->document());inserted.setPosition(objectPosition);inserted.movePosition(QTextCursor::NextCharacter,QTextCursor::KeepAnchor);editDescriptionInline(inserted);
 }
 void ScreenshotBlocks::chooseImage(){if(m_editor->isReadOnly())return;const auto file=QFileDialog::getOpenFileName(m_editor,tr("Добавить изображение"),{},imageFilter());if(!file.isEmpty())insertImage({},file);}
-void ScreenshotBlocks::closeEditor(){if(m_title){m_title->clearFocus();delete m_title.data();}if(m_popup){m_popup->close();delete m_popup.data();}}
+void ScreenshotBlocks::closeEditor(){if(m_inlineDescription){delete m_inlineDescription.data();}if(m_title){m_title->clearFocus();delete m_title.data();}if(m_popup){m_popup->close();delete m_popup.data();}}
 bool ScreenshotBlocks::eventFilter(QObject *object,QEvent *event) {
     if(object->property("screenshotField").toBool()) {
         if(event->type()==QEvent::ShortcutOverride){event->accept();return true;}
@@ -307,10 +310,10 @@ bool ScreenshotBlocks::descriptionOverflows(const QString &text,qreal width) con
 void ScreenshotBlocks::editCard(QTextCursor c,bool description) {
     closeEditor();m_editCursor=c;auto o=metadata(c);if(!valid(o))return;const auto rect=cardRect(c);
     QString style=QString("background:%1;color:%2;border:1px solid #448ac9;selection-background-color:#448ac9;").arg(surface(false).name(),m_foreground.name());
-    if(!description){auto *line=new QLineEdit(o["title"].toString(),m_editor->viewport());m_title=line;line->setObjectName("screenshotTitleEdit");line->setPlaceholderText(tr("Название скриншота"));line->setStyleSheet(style);line->setGeometry(rect.left()+qMin(120,int(rect.width()*.25))+20,rect.top()+10,qMax(24,rect.width()-qMin(120,int(rect.width()*.25))-112),26);
+    if(!description){auto *line=new QLineEdit(o["title"].toString(),m_editor->viewport());m_title=line;line->setObjectName("screenshotTitleEdit");line->setPlaceholderText(displayTitle(o).isEmpty()?tr("Название скриншота"):displayTitle(o));line->setStyleSheet(style);line->setGeometry(rect.left()+qMin(120,int(rect.width()*.25))+20,rect.top()+10,qMax(24,rect.width()-qMin(120,int(rect.width()*.25))-112),26);
         line->setProperty("screenshotField",true);line->installEventFilter(this);
         connect(line,&QLineEdit::textEdited,this,[this,c](const QString &value){auto o=metadata(c);o["title"]=value;updateMetadata(c,o);});connect(line,&QLineEdit::returnPressed,line,&QWidget::hide);connect(line,&QLineEdit::editingFinished,line,&QWidget::hide);line->show();line->setFocus();line->selectAll();
-    }else{auto *popup=new QFrame(m_editor,Qt::Popup|Qt::FramelessWindowHint);m_popup=popup;popup->setObjectName("screenshotDescriptionPopup");popup->setAttribute(Qt::WA_DeleteOnClose);popup->setStyleSheet("QFrame#screenshotDescriptionPopup{"+style+"}");auto *layout=new QVBoxLayout(popup);layout->setContentsMargins(8,8,8,8);auto *edit=new QTextEdit(popup);edit->setAcceptRichText(false);edit->setObjectName("screenshotDescriptionEdit");edit->setPlaceholderText(tr("Описание скриншота"));edit->setStyleSheet(style);edit->setPlainText(o["description"].toString());layout->addWidget(edit);
+    }else{auto *popup=new QFrame(m_editor,Qt::Popup|Qt::FramelessWindowHint);m_popup=popup;popup->setObjectName("screenshotDescriptionPopup");popup->setAttribute(Qt::WA_DeleteOnClose);popup->setStyleSheet(QString("QFrame#screenshotDescriptionPopup{background:%1;border:1px solid #777;}").arg(surface(false).name()));auto *layout=new QVBoxLayout(popup);layout->setContentsMargins(8,8,8,8);auto *edit=new QTextEdit(popup);edit->setAcceptRichText(false);edit->setObjectName("screenshotDescriptionEdit");edit->setPlaceholderText(tr("Описание скриншота"));edit->setStyleSheet(QString("QTextEdit{background:%1;color:%2;border:none;selection-background-color:#448ac9;}").arg(surface(false).name(),m_foreground.name()));edit->setPlainText(o["description"].toString());layout->addWidget(edit);
         connect(edit,&QTextEdit::textChanged,this,[this,c,edit]{auto o=metadata(c);o["description"]=edit->toPlainText();updateMetadata(c,o);});
         edit->setProperty("screenshotField",true);edit->installEventFilter(this);edit->setFont(m_editor->font());
         QFile scrollStyle(":/styles/components/custom-scrollbar.css");if(scrollStyle.open(QIODevice::ReadOnly))edit->verticalScrollBar()->setStyleSheet(QString::fromUtf8(scrollStyle.readAll()));
@@ -318,17 +321,47 @@ void ScreenshotBlocks::editCard(QTextCursor c,bool description) {
         edit->verticalScrollBar()->style()->unpolish(edit->verticalScrollBar());edit->verticalScrollBar()->style()->polish(edit->verticalScrollBar());
         auto screen=m_editor->screen()->availableGeometry();const QSize size(qMin(420,screen.width()-16),qMin(280,screen.height()-32));auto pos=m_editor->viewport()->mapToGlobal(rect.bottomLeft());pos.setX(qBound(screen.left()+8,pos.x(),screen.right()-size.width()-8));pos.setY(qBound(screen.top()+8,pos.y(),screen.bottom()-size.height()-8));popup->resize(size);popup->move(pos);popup->show();edit->setFocus();}
 }
+QString ScreenshotBlocks::displayTitle(const QJsonObject &o) {
+    if(!o["title"].toString().trimmed().isEmpty())return o["title"].toString();
+    for(const auto &line:o["description"].toString().split('\n'))if(!line.trimmed().isEmpty())return line.trimmed().left(160);
+    return {};
+}
+void ScreenshotBlocks::editDescriptionInline(QTextCursor c) {
+    closeEditor();m_editCursor=c;const auto o=metadata(c);if(!valid(o))return;
+    auto *edit=new QTextEdit(m_editor->viewport());m_inlineDescription=edit;edit->setObjectName("screenshotInlineDescription");edit->setAcceptRichText(false);auto font=m_editor->font();font.setPointSizeF(qMin(12.0,font.pointSizeF()>0?font.pointSizeF():11.0));edit->setFont(font);edit->setPlaceholderText(tr("Описание"));
+    edit->setStyleSheet(QString("QTextEdit{background:transparent;color:%1;border:none;selection-background-color:#448ac9;}").arg(m_foreground.name()));
+    const auto rect=cardRect(c);const int left=rect.left()+qMin(120,int(rect.width()*.25))+20;
+    edit->setGeometry(left,rect.top()+36,qMax(24,rect.right()-left-38),52);edit->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);edit->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);edit->setPlainText(o["description"].toString());
+    connect(edit,&QTextEdit::textChanged,this,[this,c,edit]{auto value=metadata(c);value["description"]=edit->toPlainText();updateMetadata(c,value);});
+    edit->setProperty("screenshotField",true);edit->installEventFilter(this);edit->show();edit->setFocus();
+}
+void ScreenshotBlocks::moveCard(QTextCursor c,int destination) {
+    if(destination>=c.selectionStart()&&destination<=c.selectionEnd())return;
+    closeEditor();QTextCursor target(m_editor->document());target.setPosition(qBound(0,destination,m_editor->document()->characterCount()-1));
+    const auto fragment=c.selection();c.beginEditBlock();c.removeSelectedText();
+    if(target.positionInBlock())target.insertBlock(QTextBlockFormat(),QTextCharFormat());
+    target.insertFragment(fragment);target.insertBlock(QTextBlockFormat(),QTextCharFormat());c.endEditBlock();m_editor->setTextCursor(target);
+}
 bool ScreenshotBlocks::handleMouse(QMouseEvent *event) {
     if(m_editor->isReadOnly())return false;
+    if(!m_dragCursor.isNull()){
+        if(event->type()==QEvent::MouseMove){m_editor->viewport()->setCursor(Qt::ClosedHandCursor);m_editor->ensureCursorVisible();return true;}
+        if(event->type()==QEvent::MouseButtonRelease){auto source=m_dragCursor;m_dragCursor=QTextCursor();if((event->pos()-m_dragStart).manhattanLength()>QApplication::startDragDistance())moveCard(source,m_editor->cursorForPosition(event->pos()).position());return true;}
+    }
     // Only inspect visible paragraphs, independent of total card count.
     auto block=m_editor->cursorForPosition(QPoint(0,event->pos().y())).block();
     for(int d=-1;d<=1;++d){auto b=d<0?block.previous():d>0?block.next():block;if(!b.isValid())continue;
         for(auto it=b.begin();!it.atEnd();++it){auto f=it.fragment();if(f.charFormat().objectType()!=ObjectType)continue;QTextCursor c(m_editor->document());c.setPosition(f.position());c.movePosition(QTextCursor::NextCharacter,QTextCursor::KeepAnchor);auto r=cardRect(c);if(!r.contains(event->pos()))continue;
             const bool actions=event->pos().x()>r.right()-86 && event->pos().y()<r.top()+34;
+            const bool expand=event->pos().x()>r.right()-32&&event->pos().y()>r.bottom()-32;
+            const bool grip=event->pos().x()<r.left()+10;
+            const bool image=event->pos().x()<r.left()+qMin(120,int(r.width()*.25))+16;
+            if(event->type()==QEvent::MouseButtonPress && event->button()==Qt::LeftButton && grip){closeEditor();m_dragCursor=c;m_dragStart=event->pos();return true;}
             if(event->type()==QEvent::MouseMove){
                 QString tooltip=tr("Изменить карточку / открыть оригинал");
                 if(actions)tooltip=event->pos().x()>r.right()-30?tr("Удалить скриншот"):event->pos().x()>r.right()-58?tr("Копировать описание"):tr("Копировать изображение");
-                m_editor->viewport()->setCursor(Qt::PointingHandCursor);m_editor->viewport()->setToolTip(tooltip);m_editor->viewport()->update();return true;
+                if(grip)tooltip=tr("Переместить блок");else if(expand)tooltip=tr("Открыть полное описание");
+                m_editor->viewport()->setCursor(grip?Qt::OpenHandCursor:(actions||expand||image)?Qt::PointingHandCursor:Qt::IBeamCursor);m_editor->viewport()->setToolTip(tooltip);m_editor->viewport()->update();return true;
             }
             if(event->type()==QEvent::MouseButtonPress && event->button()==Qt::LeftButton && actions)return true;
             if(event->type()!=QEvent::MouseButtonRelease||event->button()!=Qt::LeftButton)return false;
@@ -338,7 +371,7 @@ bool ScreenshotBlocks::handleMouse(QMouseEvent *event) {
                 else copyImage(c);
             }
             else if(event->pos().x()<r.left()+qMin(120,int(r.width()*.25))+16){const QString original=safePath(o["original"].toString());if(original.isEmpty()||!QFileInfo::exists(original)){const auto retry=m_imports.value(o["original"].toString());if(!retry.image.isNull()||!retry.file.isEmpty())startJob(o,retry.image,retry.file,true);else {const auto file=QFileDialog::getOpenFileName(m_editor,tr("Восстановить оригинал"),{},imageFilter());if(!file.isEmpty())startJob(o,{},file,true);}}else if(!QDesktopServices::openUrl(QUrl::fromLocalFile(original)))QMessageBox::warning(m_editor,tr("Просмотр изображения"),tr("Не удалось открыть изображение в стандартной программе Windows."));}
-            else editCard(c,event->pos().y()>r.top()+36);return true;
+            else if(expand)editCard(c,true);else if(event->pos().y()>r.top()+36){editDescriptionInline(c);if(m_inlineDescription)m_inlineDescription->setTextCursor(m_inlineDescription->cursorForPosition(event->pos()-m_inlineDescription->pos()));}else editCard(c,false);return true;
         }
     }
     return false;
