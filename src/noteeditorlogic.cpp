@@ -838,6 +838,7 @@ void NoteEditorLogic::setTheme(Theme::Value theme, QColor textColor, qreal fontS
     m_textEdit->screenshots()->setTheme(theme, textColor);
     m_tagListDelegate->setTheme(theme);
     m_highlighter->setTheme(theme, textColor, fontSize);
+    m_highlighter->rehighlight();
     switch (theme) {
     case Theme::Light: {
         m_spacerColor = QColor(191, 191, 191);
