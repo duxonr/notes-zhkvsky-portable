@@ -22,6 +22,8 @@
 #include <QMessageBox>
 #include <QScrollBar>
 #include <QMenu>
+#include <QCryptographicHash>
+#include <QStyle>
 
 namespace {
 const QString prefix = QStringLiteral("[!notes-screenshot:v1:");
@@ -86,6 +88,11 @@ QString ScreenshotBlocks::readableText(const QString &text) {
         QString replacement=o["title"].toString();if(replacement.isEmpty())replacement=tr("Скриншот");
         replacement+=' '+o["description"].toString().replace('\n',' ');
         result.replace(m.capturedStart()+delta,m.capturedLength(),replacement);delta+=replacement.size()-m.capturedLength();}
+    return result;
+}
+QString ScreenshotBlocks::withoutCards(const QString &text) {
+    QString result=text;auto it=token.globalMatch(text);int delta=0;
+    while(it.hasNext()){auto m=it.next();if(parseMarker(m.captured()).isEmpty())continue;result.remove(m.capturedStart()+delta,m.capturedLength());delta-=m.capturedLength();}
     return result;
 }
 QString ScreenshotBlocks::serialize(const QTextCursor &selection) {
@@ -174,7 +181,7 @@ void ScreenshotBlocks::startJob(const QJsonObject &o,const QImage &image,const Q
         Result result;
         if(original.isEmpty()||thumb.isEmpty()||!QDir().mkpath(QFileInfo(original).absolutePath())||!QDir().mkpath(QFileInfo(thumb).absolutePath())){result.error=tr("Нет доступа к папке изображений.");return result;}
         if(importing){bool saved=file.isEmpty()?writeImage(original,image):copyAtomic(file,original);if(!saved){result.error=tr("Не удалось записать оригинал. Проверьте свободное место и права доступа. Карточка сохранена; нажмите на неё, чтобы восстановить файл.");return result;}}
-        if(!importing && QFileInfo::exists(thumb)){QImageReader cached(thumb);result.thumbnail=cached.read();}
+        if(!importing && QFileInfo::exists(thumb)){QImageReader cached(thumb);const auto size=cached.size();if(size.isValid() && size.width()<=240 && size.height()<=160)result.thumbnail=cached.read();}
         if(result.thumbnail.isNull()){
             QImageReader reader(original);reader.setAutoTransform(true);auto size=reader.size();
             if(!size.isValid()||qint64(size.width())*size.height()>160000000){result.error=tr("Изображение отсутствует, повреждено или слишком велико. Нажмите на миниатюру для восстановления.");return result;}
@@ -183,7 +190,7 @@ void ScreenshotBlocks::startJob(const QJsonObject &o,const QImage &image,const Q
         }
         return result;
     });
-    if(importing)m_writes<<future;
+    if(importing){for(int i=m_writes.size()-1;i>=0;--i)if(m_writes[i].isFinished())m_writes.removeAt(i);m_writes<<future;}
     auto *watcher=new QFutureWatcher<Result>(this);
     connect(watcher,&QFutureWatcher<Result>::finished,this,[this,watcher,id,importing]{auto result=watcher->result();m_pending.remove(id);
         if(!result.thumbnail.isNull())m_thumbnails.insert(id,new QImage(result.thumbnail),qMax(1,int(result.thumbnail.sizeInBytes()/1024)));
@@ -214,6 +221,10 @@ void ScreenshotBlocks::editCard(QTextCursor c,bool description) {
         connect(line,&QLineEdit::textEdited,this,[this,c](const QString &value){auto o=metadata(c);o["title"]=value;updateMetadata(c,o);});connect(line,&QLineEdit::returnPressed,line,&QWidget::hide);connect(line,&QLineEdit::editingFinished,line,&QWidget::hide);line->show();line->setFocus();line->selectAll();
     }else{auto *popup=new QFrame(m_editor,Qt::Popup|Qt::FramelessWindowHint);m_popup=popup;popup->setObjectName("screenshotDescriptionPopup");popup->setAttribute(Qt::WA_DeleteOnClose);popup->setStyleSheet("QFrame#screenshotDescriptionPopup{"+style+"}");auto *layout=new QVBoxLayout(popup);layout->setContentsMargins(8,8,8,8);auto *edit=new QTextEdit(popup);edit->setAcceptRichText(false);edit->setObjectName("screenshotDescriptionEdit");edit->setPlaceholderText(tr("Описание скриншота"));edit->setStyleSheet(style);edit->setPlainText(o["description"].toString());layout->addWidget(edit);
         connect(edit,&QTextEdit::textChanged,this,[this,c,edit]{auto o=metadata(c);o["description"]=edit->toPlainText();updateMetadata(c,o);});
+        edit->setFont(m_editor->font());
+        QFile scrollStyle(":/styles/components/custom-scrollbar.css");if(scrollStyle.open(QIODevice::ReadOnly))edit->verticalScrollBar()->setStyleSheet(QString::fromUtf8(scrollStyle.readAll()));
+        edit->verticalScrollBar()->setProperty("class",m_theme==Theme::Dark?"dark":m_theme==Theme::Sepia?"sepia":"light");
+        edit->verticalScrollBar()->style()->unpolish(edit->verticalScrollBar());edit->verticalScrollBar()->style()->polish(edit->verticalScrollBar());
         auto screen=m_editor->screen()->availableGeometry();const QSize size(qMin(420,screen.width()-16),qMin(280,screen.height()-32));auto pos=m_editor->viewport()->mapToGlobal(rect.bottomLeft());pos.setX(qBound(screen.left()+8,pos.x(),screen.right()-size.width()-8));pos.setY(qBound(screen.top()+8,pos.y(),screen.bottom()-size.height()-8));popup->resize(size);popup->move(pos);popup->show();edit->setFocus();}
 }
 bool ScreenshotBlocks::handleMouse(QMouseEvent *event) {
@@ -238,4 +249,23 @@ QString ScreenshotBlocks::exportMarkdown(const QString &source,const QString &di
         QString title=o["title"].toString();title.replace(']',' ');QString replacement="!["+title+"]("+relative+")";if(!o["description"].toString().isEmpty())replacement+="\n\n"+o["description"].toString();
         result.replace(m.capturedStart()+delta,m.capturedLength(),replacement);delta+=replacement.size()-m.capturedLength();}
     return result;
+}
+
+bool ScreenshotBlocks::copyAssets(const QString &fromData,const QString &toData,QString *error) {
+    for(const auto &folder:{QStringLiteral("Attachments"),QStringLiteral("Thumbnails")}) {
+        QDir source(QDir(fromData).filePath(folder));
+        if(!source.exists())continue;
+        QDir target(QDir(toData).filePath(folder));
+        if(QFileInfo(source.path()).isSymLink() || QFileInfo(target.path()).isSymLink() || !QDir().mkpath(target.path())){if(error)*error=tr("Нет доступа к папке изображений резервной копии.");return false;}
+        for(const auto &name:source.entryList(QDir::Files)) {
+            const auto from=source.filePath(name),to=target.filePath(name);
+            if(QFileInfo(from).isSymLink()||QFileInfo(to).isSymLink()){if(error)*error=tr("Символические ссылки в папке изображений не поддерживаются.");return false;}
+            if(QFileInfo::exists(to)){
+                QFile a(from),b(to);if(!a.open(QIODevice::ReadOnly)||!b.open(QIODevice::ReadOnly)){if(error)*error=tr("Не удалось проверить изображение.");return false;}
+                QCryptographicHash ah(QCryptographicHash::Sha256),bh(QCryptographicHash::Sha256);ah.addData(&a);bh.addData(&b);
+                if(ah.result()!=bh.result()){if(error)*error=tr("Конфликт файла %1. Существующий оригинал не перезаписан.").arg(name);return false;}
+            }else if(!copyAtomic(from,to)){if(error)*error=tr("Не удалось скопировать изображение %1.").arg(name);return false;}
+        }
+    }
+    return true;
 }

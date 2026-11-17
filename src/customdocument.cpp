@@ -133,7 +133,7 @@ void CustomDocument::insertFromMimeData(const QMimeData *source)
     }
     // Explicit text takes precedence over an HTML/image fallback from a browser.
     if(source->hasImage() && !source->hasText()) {m_screenshots->insertImage(qvariant_cast<QImage>(source->imageData()));return;}
-    if(source->hasText()) insertPlainText(source->text());
+    if(source->hasText()) {prepareTextInsertion();insertPlainText(source->text());}
     else QTextEdit::insertFromMimeData(source);
 }
 
@@ -160,6 +160,32 @@ void CustomDocument::contextMenuEvent(QContextMenuEvent *event)
  * @param position
  * @return url string
  */
+void CustomDocument::prepareTextInsertion()
+{
+    auto c=textCursor();
+    if(c.hasSelection() || !c.block().text().contains(QChar::ObjectReplacementCharacter))return;
+    const int object=c.block().position()+c.block().text().indexOf(QChar::ObjectReplacementCharacter);
+    c.beginEditBlock();
+    if(c.position()<=object){const int position=c.position();c.insertBlock(QTextBlockFormat(),QTextCharFormat());c.setPosition(position);}
+    else c.insertBlock(QTextBlockFormat(),QTextCharFormat());
+    c.endEditBlock();setTextCursor(c);
+}
+
+void CustomDocument::keyPressEvent(QKeyEvent *event)
+{
+    auto c=textCursor();
+    if(!isReadOnly() && !c.hasSelection() && event->modifiers()==Qt::NoModifier){
+        if(event->key()==Qt::Key_Backspace && c.atBlockStart() && c.block().previous().text()==QString(QChar::ObjectReplacementCharacter)){
+            QTextCursor object(c.block().previous());object.movePosition(QTextCursor::NextCharacter,QTextCursor::KeepAnchor);m_screenshots->removeCard(object);return;
+        }
+        if(event->key()==Qt::Key_Delete && c.atBlockEnd() && c.block().next().text()==QString(QChar::ObjectReplacementCharacter)){
+            QTextCursor object(c.block().next());object.movePosition(QTextCursor::NextCharacter,QTextCursor::KeepAnchor);m_screenshots->removeCard(object);return;
+        }
+    }
+    if(!event->text().isEmpty() && event->text()[0].isPrint() && !(event->modifiers()&(Qt::ControlModifier|Qt::AltModifier)))prepareTextInsertion();
+    QTextEdit::keyPressEvent(event);
+}
+
 QString CustomDocument::getMarkdownUrlAtPosition(const QString &text, int position)
 {
     QString url;
@@ -371,6 +397,7 @@ void CustomDocument::moveBlockUp()
 
         cursor.movePosition(QTextCursor::StartOfBlock);
         cursor.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
+        currentBlock = ScreenshotBlocks::serialize(cursor);
         cursor.removeSelectedText();
         // also remove empty line
         cursor.deletePreviousChar();
@@ -380,7 +407,7 @@ void CustomDocument::moveBlockUp()
             // block above is empty, this is fine
         }
         // insert the removed block again
-        cursor.insertText(currentBlock);
+        ScreenshotBlocks::insertSource(cursor, currentBlock);
         cursor.insertBlock();
 
         // move cursor to previous block
@@ -403,6 +430,7 @@ void CustomDocument::moveBlockDown()
 
     cursor.movePosition(QTextCursor::StartOfBlock);
     cursor.movePosition(QTextCursor::EndOfBlock, QTextCursor::KeepAnchor);
+    currentBlock = ScreenshotBlocks::serialize(cursor);
     cursor.removeSelectedText();
     // also remove empty line
     cursor.deleteChar();
@@ -412,7 +440,7 @@ void CustomDocument::moveBlockDown()
     }
     // insert the removed block again
     cursor.insertBlock();
-    cursor.insertText(currentBlock);
+    ScreenshotBlocks::insertSource(cursor, currentBlock);
 
     // move cursor to next block
     if (!cursor.movePosition(QTextCursor::StartOfBlock)) {

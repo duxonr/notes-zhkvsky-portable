@@ -1,5 +1,7 @@
 #include "dbmanager.h"
 #include "screenshotblocks.h"
+#include <QSaveFile>
+#include <QJsonDocument>
 #include <QtSql/QSqlQuery>
 #include <QTimeZone>
 #include <QDateTime>
@@ -1341,7 +1343,7 @@ void DBManager::searchForNotes(const QString &keyword, const ListViewInfo &inf)
                            R"("child_notes_count" )"
                            R"(FROM node_table )"
                            R"(WHERE node_type = (:node_type) AND parent_id != (:parent_id) )"
-                           R"(AND content like  '%' || (:search_expr) || '%';)")) {
+                           R"(AND (content like '%' || (:search_expr) || '%' OR content like '%[!notes-screenshot:v1:%');)")) {
             qDebug() << __FUNCTION__ << __LINE__ << query.lastError();
         }
         query.bindValue(QStringLiteral(":node_type"), static_cast<int>(NodeData::Type::Note));
@@ -1369,7 +1371,7 @@ void DBManager::searchForNotes(const QString &keyword, const ListViewInfo &inf)
                 node.setTagIds(getAllTagForNote(node.id()));
                 auto p = getNode(node.parentId());
                 node.setParentName(p.fullTitle());
-                nodeList.append(node);
+                if (!node.content().contains("[!notes-screenshot:v1:") || ScreenshotBlocks::readableText(node.content()).contains(keyword, Qt::CaseInsensitive)) nodeList.append(node);
             }
         } else {
             qDebug() << __FUNCTION__ << __LINE__ << query.lastError();
@@ -1392,7 +1394,7 @@ void DBManager::searchForNotes(const QString &keyword, const ListViewInfo &inf)
                            R"("child_notes_count" )"
                            R"(FROM node_table )"
                            R"(WHERE node_type = (:node_type) AND parent_id == (:parent_id) )"
-                           R"(AND content like  '%' || (:search_expr) || '%';)")) {
+                           R"(AND (content like '%' || (:search_expr) || '%' OR content like '%[!notes-screenshot:v1:%');)")) {
             qDebug() << __FUNCTION__ << __LINE__ << query.lastError();
         }
         query.bindValue(QStringLiteral(":node_type"), static_cast<int>(NodeData::Type::Note));
@@ -1420,7 +1422,7 @@ void DBManager::searchForNotes(const QString &keyword, const ListViewInfo &inf)
                 node.setTagIds(getAllTagForNote(node.id()));
                 auto p = getNode(node.parentId());
                 node.setParentName(p.fullTitle());
-                nodeList.append(node);
+                if (!node.content().contains("[!notes-screenshot:v1:") || ScreenshotBlocks::readableText(node.content()).contains(keyword, Qt::CaseInsensitive)) nodeList.append(node);
             }
         } else {
             qDebug() << __FUNCTION__ << __LINE__ << query.lastError();
@@ -1472,8 +1474,8 @@ void DBManager::searchForNotes(const QString &keyword, const ListViewInfo &inf)
         }
         for (const auto &id : noteIds) {
             NodeData node = getNode(id);
-            if (node.id() != INVALID_NODE_ID && node.nodeType() == NodeData::Type::Note && node.content().contains(keyword)) {
-                nodeList.append(node);
+            if (node.id() != INVALID_NODE_ID && node.nodeType() == NodeData::Type::Note && ScreenshotBlocks::readableText(node.content()).contains(keyword, Qt::CaseInsensitive)) {
+                if (!node.content().contains("[!notes-screenshot:v1:") || ScreenshotBlocks::readableText(node.content()).contains(keyword, Qt::CaseInsensitive)) nodeList.append(node);
             } else {
                 qDebug() << __FUNCTION__ << "Note with id" << id << "is not valid";
             }
@@ -1866,7 +1868,16 @@ void DBManager::onCreateUpdateRequestedNoteContent(const NodeData &note)
     }
     bool exists = isNodeExist(note);
 
-    if (!m_db.transaction()) return;
+    const auto reportFailure = [this, &note] {
+        const auto directory = QDir(ScreenshotBlocks::dataRoot()).filePath("Recovery");
+        QDir().mkpath(directory);
+        QSaveFile recovery(QDir(directory).filePath(QString("note-%1-%2.json").arg(note.id()).arg(QDateTime::currentMSecsSinceEpoch())));
+        const QJsonObject snapshot{{"note",note.id()},{"title",note.fullTitle()},{"manualTitle",note.hasManualTitle()},{"content",note.content()}};
+        const auto bytes=QJsonDocument(snapshot).toJson();
+        const bool saved=recovery.open(QIODevice::WriteOnly) && recovery.write(bytes)==bytes.size() && recovery.commit();
+        emit showErrorMessage(tr("Ошибка сохранения заметки"),saved ? tr("SQLite не сохранил изменения. Копия текста и карточек записана в Data/Recovery. Освободите место и повторите сохранение.") : tr("Не удалось сохранить заметку и резервную копию. Не закрывайте программу; скопируйте содержимое в безопасное место."));
+    };
+    if (!m_db.transaction()) { reportFailure(); return; }
     const int savedId = exists ? (updateNoteContent(note) ? note.id() : INVALID_NODE_ID) : addNode(note);
     QSqlQuery titleFlag(m_db);
     titleFlag.prepare("DELETE FROM metadata WHERE key = :key");
@@ -1878,7 +1889,7 @@ void DBManager::onCreateUpdateRequestedNoteContent(const NodeData &note)
         titleFlag.bindValue(":key", key);
         ok = titleFlag.exec();
     }
-    if (!ok || !m_db.commit()) { m_db.rollback(); return; }
+    if (!ok || !m_db.commit()) { m_db.rollback(); reportFailure(); return; }
     if (note.hasManualTitle()) m_manualTitleIds.insert(savedId); else m_manualTitleIds.remove(savedId);
 }
 
@@ -1888,6 +1899,8 @@ void DBManager::onCreateUpdateRequestedNoteContent(const NodeData &note)
  */
 void DBManager::onImportNotesRequested(const QString &fileName)
 {
+    QString assetError;
+    if(!ScreenshotBlocks::copyAssets(fileName+".assets",ScreenshotBlocks::dataRoot(),&assetError)){emit showErrorMessage(tr("Import error"),assetError);return;}
     QFile file(fileName);
     if (!file.open(QIODevice::ReadOnly)) {
         qDebug() << __FUNCTION__ << __LINE__ << "fail to open file";
@@ -2244,6 +2257,8 @@ void DBManager::onImportNotesRequested(const QString &fileName)
  */
 void DBManager::onRestoreNotesRequested(const QString &fileName)
 {
+    QString assetError;
+    if(!ScreenshotBlocks::copyAssets(fileName+".assets",ScreenshotBlocks::dataRoot(),&assetError)){emit showErrorMessage(tr("Restore error"),assetError);return;}
     QFile file(fileName);
     if (!file.open(QIODevice::ReadOnly)) {
         qDebug() << __FUNCTION__ << __LINE__ << "fail to open file";
@@ -2316,6 +2331,8 @@ void DBManager::onRestoreNotesRequested(const QString &fileName)
  */
 void DBManager::onExportNotesRequested(const QString &fileName)
 {
+    QString assetError;
+    if(!ScreenshotBlocks::copyAssets(ScreenshotBlocks::dataRoot(),fileName+".assets",&assetError)){emit showErrorMessage(tr("Backup error"),assetError);return;}
     QSqlQuery query(m_db);
     if (!query.prepare("BEGIN IMMEDIATE;")) {
         qDebug() << __FUNCTION__ << __LINE__ << query.lastError();

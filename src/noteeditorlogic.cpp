@@ -197,12 +197,12 @@ void NoteEditorLogic::showNotesInEditor(const QVector<NodeData> &notes)
             cursor.movePosition(QTextCursor::End);
             if (!notes[i].content().endsWith("\n")) {
                 if (i != 0) {
-                    cursor.insertText("\n" + notes[i].content() + "\n");
+                    ScreenshotBlocks::insertSource(cursor, "\n" + notes[i].content() + "\n");
                 } else {
-                    cursor.insertText(notes[i].content() + "\n");
+                    ScreenshotBlocks::insertSource(cursor, notes[i].content() + "\n");
                 }
             } else {
-                cursor.insertText(notes[i].content());
+                ScreenshotBlocks::insertSource(cursor, notes[i].content());
             }
             if (i != notes.size() - 1) {
                 cursor.movePosition(QTextCursor::End);
@@ -754,6 +754,7 @@ void NoteEditorLogic::onNoteTagListChanged(int noteId, const QSet<int> &tagIds)
 
 void NoteEditorLogic::deleteCurrentNote()
 {
+    m_textEdit->screenshots()->closeEditor();
     if (m_titleEdit) { m_titleEdit->clear(); m_titleEdit->hide(); }
     if (isTempNote()) {
         auto noteNeedDeleted = m_currentNotes[0];
@@ -778,7 +779,7 @@ void NoteEditorLogic::deleteCurrentNote()
 
 QString NoteEditorLogic::getNthLine(const QString &str, int targetLineNumber)
 {
-    const QString readable = ScreenshotBlocks::readableText(str);
+    const QString readable = ScreenshotBlocks::withoutCards(str);
     if (readable != str) return getNthLine(readable, targetLineNumber);
     if (targetLineNumber < 1) {
         return tr("Invalid line number");

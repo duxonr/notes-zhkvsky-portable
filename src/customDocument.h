@@ -36,12 +36,14 @@ protected:
     void insertFromMimeData(const QMimeData *source) override;
     QMimeData *createMimeDataFromSelection() const override;
     void contextMenuEvent(QContextMenuEvent *event) override;
+    void keyPressEvent(QKeyEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
 
     QStringList _ignoredClickUrlSchemata;
 private:
     ScreenshotBlocks *m_screenshots;
+    void prepareTextInsertion();
 };
 
 #endif // CUSTOMDOCUMENT_H

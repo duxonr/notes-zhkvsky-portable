@@ -30,7 +30,9 @@ public:
     static QString marker(const QJsonObject &);
     static QJsonObject parseMarker(const QString &);
     static QString readableText(const QString &);
+    static QString withoutCards(const QString &);
     static QString exportMarkdown(const QString &, const QString &directory, QString *error);
+    static bool copyAssets(const QString &fromData, const QString &toData, QString *error);
     static QString serialize(const QTextCursor &);
     static void insertSource(QTextCursor &, const QString &, bool cloneIds = false);
     void load(const QString &);

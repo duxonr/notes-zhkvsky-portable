@@ -60,6 +60,10 @@ subprocess.run(['cmd.exe', '/d', '/c', str(script)], cwd=build, check=True)
 result = subprocess.run([str(out / 'UiDriver.exe')] + (['--scroll-popup-only'] if args.scroll_popup_only else ['--feedback-only'] if args.feedback_only else ['--card-only'] if args.card_only else []), cwd=out)
 print((out / 'ui-test-report.txt').read_text(encoding='utf-8'))
 if result.returncode == 0:
+    if args.screenshots:
+        restarted = subprocess.run([str(out / 'UiDriver.exe'), '--verify-screenshot'], cwd=out)
+        print((out / 'ui-test-report.txt').read_text(encoding='utf-8'))
+        raise SystemExit(restarted.returncode)
     report_text = (out / 'ui-test-report.txt').read_text(encoding='utf-8')
     heading_id = re.search(r'RESTART_HEADING_ID=(\d+)', report_text)
     if heading_id:

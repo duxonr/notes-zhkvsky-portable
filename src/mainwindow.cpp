@@ -2755,6 +2755,8 @@ void MainWindow::executeImport(const bool replace)
  */
 void MainWindow::exportNotesFile()
 {
+    m_textEdit->screenshots()->waitForWrites();
+    m_noteEditorLogic->saveNoteToDB();
     QString fileName = QFileDialog::getSaveFileName(this, tr("Save Notes"), "notes.nbk", tr("Notes Backup File (*.nbk)"));
     if (fileName.isEmpty()) {
         return;
