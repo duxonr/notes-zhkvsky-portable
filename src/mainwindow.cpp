@@ -19,6 +19,7 @@
 
 #include <QScrollBar>
 #include <QQuickItem>
+#include "screenshotblocks.h"
 #include <QShortcut>
 #include <QTextStream>
 #include <QScrollArea>
@@ -2634,6 +2635,8 @@ void MainWindow::minimizeWindow()
  */
 void MainWindow::quitApplication()
 {
+    m_textEdit->screenshots()->closeEditor();
+    m_textEdit->screenshots()->waitForWrites();
     if (windowState() != Qt::WindowFullScreen) {
         m_settingsDatabase->setValue(QStringLiteral("windowGeometry"), saveGeometry());
     }

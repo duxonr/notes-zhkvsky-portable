@@ -12,6 +12,7 @@ import shutil
 import subprocess
 
 parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--screenshots', action='store_true')
 parser.add_argument('--scroll-popup-only', action='store_true')
 parser.add_argument('--card-only', action='store_true')
 parser.add_argument('--feedback-only', action='store_true')
@@ -37,7 +38,7 @@ for item in runtime.iterdir():
     else:
         shutil.copy2(item, out / item.name)
 shutil.copy2(qt / 'bin/Qt6Test.dll', out / 'Qt6Test.dll')
-source = Path(__file__).with_name('ui_ux_v02.cpp').resolve()
+source = Path(__file__).with_name('screenshot_blocks.cpp' if args.screenshots else 'ui_ux_v02.cpp').resolve()
 command = re.sub(r'/Fo\S+', '/Foui_v02_test.obj', command)
 command = command[:command.rfind(' -c ')] + f' -I"{qt / "include/QtTest"}" -c "{source}"'
 objects = [p for p in (build / 'CMakeFiles/Notes.dir').rglob('*.obj') if p.name != 'main.cpp.obj']

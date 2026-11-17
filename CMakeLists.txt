@@ -130,6 +130,8 @@ set(SOURCES
     ${PROJECT_SOURCE_DIR}/src/customapplicationstyle.cpp
     ${PROJECT_SOURCE_DIR}/src/customapplicationstyle.h
     ${PROJECT_SOURCE_DIR}/src/customdocument.cpp
+    ${PROJECT_SOURCE_DIR}/src/screenshotblocks.cpp
+    ${PROJECT_SOURCE_DIR}/src/screenshotblocks.h
     ${PROJECT_SOURCE_DIR}/src/customDocument.h
     ${PROJECT_SOURCE_DIR}/src/customMarkdownHighlighter.cpp
     ${PROJECT_SOURCE_DIR}/src/customMarkdownHighlighter.h

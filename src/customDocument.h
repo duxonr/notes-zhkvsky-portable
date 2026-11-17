@@ -5,12 +5,17 @@
 #include <QStringList>
 #include <QTextEdit>
 
+class ScreenshotBlocks;
+
 class CustomDocument : public QTextEdit
 {
     Q_OBJECT
 
 public:
     explicit CustomDocument(QWidget *parent);
+    QString toPlainText() const;
+    void setText(const QString &text);
+    ScreenshotBlocks *screenshots() const { return m_screenshots; }
     void setDocumentPadding(int left, int top, int right, int bottom);
     bool eventFilter(QObject *obj, QEvent *event) override;
     bool openLinkAtCursorPosition();
@@ -27,10 +32,16 @@ signals:
 
     // QWidget interface
 protected:
+    bool canInsertFromMimeData(const QMimeData *source) const override;
+    void insertFromMimeData(const QMimeData *source) override;
+    QMimeData *createMimeDataFromSelection() const override;
+    void contextMenuEvent(QContextMenuEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
 
     QStringList _ignoredClickUrlSchemata;
+private:
+    ScreenshotBlocks *m_screenshots;
 };
 
 #endif // CUSTOMDOCUMENT_H

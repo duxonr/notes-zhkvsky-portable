@@ -3,9 +3,13 @@
 #include <QGuiApplication>
 #include <QTextCursor>
 #include <QMessageBox>
+#include "screenshotblocks.h"
+#include <QMimeData>
+#include <QMenu>
 
 CustomDocument::CustomDocument(QWidget *parent) : QTextEdit(parent)
 {
+    m_screenshots = new ScreenshotBlocks(this);
     installEventFilter(this);
     viewport()->installEventFilter(this);
     setMouseTracking(true);
@@ -42,6 +46,9 @@ void CustomDocument::mouseMoveEvent(QMouseEvent *event)
 
 bool CustomDocument::eventFilter(QObject *obj, QEvent *event)
 {
+    if (obj == viewport() && (event->type() == QEvent::MouseButtonRelease || event->type() == QEvent::MouseMove)) {
+        if (m_screenshots->handleMouse(static_cast<QMouseEvent *>(event))) return true;
+    }
     // qDebug() << event->type();
 
     if (event->type() == QEvent::HoverMove) {
@@ -94,6 +101,57 @@ bool CustomDocument::eventFilter(QObject *obj, QEvent *event)
     }
 
     return QTextEdit::eventFilter(obj, event);
+}
+
+QString CustomDocument::toPlainText() const
+{
+    QTextCursor all(document()); all.select(QTextCursor::Document);
+    return ScreenshotBlocks::serialize(all);
+}
+
+void CustomDocument::setText(const QString &text)
+{
+    m_screenshots->load(text);
+}
+
+bool CustomDocument::canInsertFromMimeData(const QMimeData *source) const
+{
+    return source->hasImage() || source->hasUrls() || QTextEdit::canInsertFromMimeData(source);
+}
+
+void CustomDocument::insertFromMimeData(const QMimeData *source)
+{
+    if (isReadOnly()) return;
+    if (source->hasFormat("application/x-notes-screenshot-blocks-v1")) {
+        auto c=textCursor(); c.beginEditBlock(); ScreenshotBlocks::insertSource(c,QString::fromUtf8(source->data("application/x-notes-screenshot-blocks-v1")),true); c.endEditBlock(); setTextCursor(c); return;
+    }
+    // File Explorer supplies URLs. Never follow HTTP URLs or fetch HTML images.
+    if (source->hasUrls()) {
+        bool imagesOnly=!source->urls().isEmpty();
+        for(const auto &url:source->urls()) imagesOnly &= url.isLocalFile() && QStringList{"png","jpg","jpeg","webp"}.contains(QFileInfo(url.toLocalFile()).suffix().toLower());
+        if(imagesOnly){for(const auto &url:source->urls())m_screenshots->insertImage({},url.toLocalFile());return;}
+    }
+    // Explicit text takes precedence over an HTML/image fallback from a browser.
+    if(source->hasImage() && !source->hasText()) {m_screenshots->insertImage(qvariant_cast<QImage>(source->imageData()));return;}
+    if(source->hasText()) insertPlainText(source->text());
+    else QTextEdit::insertFromMimeData(source);
+}
+
+QMimeData *CustomDocument::createMimeDataFromSelection() const
+{
+    auto *mime=new QMimeData;
+    const auto source=ScreenshotBlocks::serialize(textCursor());
+    mime->setData("application/x-notes-screenshot-blocks-v1",source.toUtf8());
+    mime->setText(ScreenshotBlocks::readableText(source));
+    return mime;
+}
+
+void CustomDocument::contextMenuEvent(QContextMenuEvent *event)
+{
+    auto *menu=createStandardContextMenu(); menu->addSeparator();
+    auto *add=menu->addAction(tr("Добавить изображение…"));add->setEnabled(!isReadOnly());
+    connect(add,&QAction::triggered,m_screenshots,&ScreenshotBlocks::chooseImage);
+    menu->exec(event->globalPos());delete menu;
 }
 
 /**

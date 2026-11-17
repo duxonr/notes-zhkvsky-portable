@@ -6,6 +6,7 @@
 #include "taglistmodel.h"
 #include "tagpool.h"
 #include "taglistdelegate.h"
+#include "screenshotblocks.h"
 #include <QScrollBar>
 #include <QLabel>
 #include <QLineEdit>
@@ -114,6 +115,7 @@ void NoteEditorLogic::setMarkdownEnabled(bool enabled)
 
 void NoteEditorLogic::showNotesInEditor(const QVector<NodeData> &notes)
 {
+    m_textEdit->screenshots()->closeEditor();
     saveNoteToDB();
     auto currentId = currentEditingNoteId();
     if (notes.size() == 1 && notes[0].id() != INVALID_NODE_ID) {
@@ -263,22 +265,22 @@ void NoteEditorLogic::rearrangeTasksInTextEditor(int startLinePosition, int endL
     if (document->findBlockByNumber(endLinePosition + 1).isValid()) {
         cursor.movePosition(QTextCursor::NextCharacter, QTextCursor::KeepAnchor);
     }
-    QString selectedText = cursor.selectedText();
+    QString selectedText = ScreenshotBlocks::serialize(cursor);
     cursor.removeSelectedText();
 
     if (newLinePosition <= startLinePosition) {
-        cursor.setPosition(document->findBlockByLineNumber(newLinePosition).position());
+        cursor.setPosition(document->findBlockByNumber(newLinePosition).position());
     } else {
         int newPositionBecauseOfRemoval = newLinePosition - (endLinePosition - startLinePosition + 1);
-        if (newPositionBecauseOfRemoval == document->lineCount()) {
-            cursor.setPosition(document->findBlockByLineNumber(newPositionBecauseOfRemoval - 1).position());
+        if (newPositionBecauseOfRemoval == document->blockCount()) {
+            cursor.setPosition(document->findBlockByNumber(newPositionBecauseOfRemoval - 1).position());
             cursor.movePosition(QTextCursor::EndOfBlock);
             selectedText = "\n" + selectedText;
         } else {
-            cursor.setPosition(document->findBlockByLineNumber(newPositionBecauseOfRemoval).position());
+            cursor.setPosition(document->findBlockByNumber(newPositionBecauseOfRemoval).position());
         }
     }
-    cursor.insertText(selectedText);
+    ScreenshotBlocks::insertSource(cursor, selectedText);
 
     checkForTasksInEditor();
 }
@@ -293,7 +295,7 @@ void NoteEditorLogic::rearrangeColumnsInTextEditor(int startLinePosition, int en
     if (document->findBlockByNumber(endLinePosition + 1).isValid()) {
         cursor.movePosition(QTextCursor::NextCharacter, QTextCursor::KeepAnchor);
     }
-    QString selectedText = cursor.selectedText();
+    QString selectedText = ScreenshotBlocks::serialize(cursor);
     cursor.removeSelectedText();
     cursor.setPosition(document->findBlockByNumber(startLinePosition).position());
     if (document->findBlockByNumber(startLinePosition + 1).isValid()) {
@@ -304,13 +306,13 @@ void NoteEditorLogic::rearrangeColumnsInTextEditor(int startLinePosition, int en
     if (startLinePosition < newLinePosition) {
         // Goes down
         int newPositionBecauseOfRemoval = newLinePosition - (endLinePosition - startLinePosition + 1);
-        cursor.setPosition(document->findBlockByLineNumber(newPositionBecauseOfRemoval).position());
+        cursor.setPosition(document->findBlockByNumber(newPositionBecauseOfRemoval).position());
         cursor.movePosition(QTextCursor::EndOfBlock);
-        cursor.insertText("\n" + selectedText);
+        ScreenshotBlocks::insertSource(cursor, "\n" + selectedText);
     } else {
         // Goes up
-        cursor.setPosition(document->findBlockByLineNumber(newLinePosition).position());
-        cursor.insertText(selectedText + "\n");
+        cursor.setPosition(document->findBlockByNumber(newLinePosition).position());
+        ScreenshotBlocks::insertSource(cursor, selectedText + "\n");
     }
 
     checkForTasksInEditor();
@@ -339,7 +341,7 @@ QMap<QString, int> NoteEditorLogic::getTaskDataInLine(const QString &line)
 void NoteEditorLogic::checkTaskInLine(int lineNumber)
 {
     QTextDocument *document = m_textEdit->document();
-    QTextBlock block = document->findBlockByLineNumber(lineNumber);
+    QTextBlock block = document->findBlockByNumber(lineNumber);
 
     if (block.isValid()) {
         int indexOfTaskInLine = getTaskDataInLine(block.text())["taskMatchIndex"];
@@ -357,7 +359,7 @@ void NoteEditorLogic::checkTaskInLine(int lineNumber)
 void NoteEditorLogic::uncheckTaskInLine(int lineNumber)
 {
     QTextDocument *document = m_textEdit->document();
-    QTextBlock block = document->findBlockByLineNumber(lineNumber);
+    QTextBlock block = document->findBlockByNumber(lineNumber);
 
     if (block.isValid()) {
         int indexOfTaskInLine = getTaskDataInLine(block.text())["taskMatchIndex"];
@@ -375,8 +377,8 @@ void NoteEditorLogic::uncheckTaskInLine(int lineNumber)
 void NoteEditorLogic::replaceTextBetweenLines(int startLinePosition, int endLinePosition, QString &newText)
 {
     QTextDocument *document = m_textEdit->document();
-    QTextBlock startBlock = document->findBlockByLineNumber(startLinePosition);
-    QTextBlock endBlock = document->findBlockByLineNumber(endLinePosition);
+    QTextBlock startBlock = document->findBlockByNumber(startLinePosition);
+    QTextBlock endBlock = document->findBlockByNumber(endLinePosition);
     QTextCursor cursor(startBlock);
     cursor.setPosition(endBlock.position() + endBlock.length() - 1, QTextCursor::KeepAnchor);
     cursor.removeSelectedText();
@@ -386,7 +388,7 @@ void NoteEditorLogic::replaceTextBetweenLines(int startLinePosition, int endLine
 void NoteEditorLogic::updateTaskText(int startLinePosition, int endLinePosition, const QString &newText)
 {
     QTextDocument *document = m_textEdit->document();
-    QTextBlock block = document->findBlockByLineNumber(startLinePosition);
+    QTextBlock block = document->findBlockByNumber(startLinePosition);
     if (block.isValid()) {
         QMap<QString, int> taskData = getTaskDataInLine(block.text());
         int indexOfTaskInLine = taskData["taskMatchIndex"];
@@ -431,7 +433,7 @@ void NoteEditorLogic::addNewTask(int startLinePosition, const QString &newTaskTe
 {
     QString newText = QStringLiteral("\n- [ ] %1").arg(newTaskText);
     QTextDocument *document = m_textEdit->document();
-    QTextBlock startBlock = document->findBlockByLineNumber(startLinePosition);
+    QTextBlock startBlock = document->findBlockByNumber(startLinePosition);
 
     if (!startBlock.isValid())
         return;
@@ -510,7 +512,7 @@ void NoteEditorLogic::removeColumn(int startLinePosition, int endLinePosition)
 void NoteEditorLogic::updateColumnTitle(int lineNumber, const QString &newText)
 {
     QTextDocument *document = m_textEdit->document();
-    QTextBlock block = document->findBlockByLineNumber(lineNumber);
+    QTextBlock block = document->findBlockByNumber(lineNumber);
 
     if (block.isValid()) {
         // Header by hashtag
@@ -578,7 +580,7 @@ void NoteEditorLogic::appendNewColumn(QJsonArray &data, QJsonObject &currentColu
 // ])
 bool NoteEditorLogic::checkForTasksInEditor()
 {
-    QStringList lines = m_textEdit->toPlainText().split("\n");
+    QStringList lines = m_textEdit->QTextEdit::toPlainText().split("\n");
     QJsonArray data;
     QJsonObject currentColumn;
     QJsonArray tasks;
@@ -588,6 +590,10 @@ bool NoteEditorLogic::checkForTasksInEditor()
     for (int i = 0; i < lines.size(); i++) {
         const QString &line = lines[i];
         QString lineTrimmed = line.trimmed();
+        if (line.contains(QChar::ObjectReplacementCharacter)) {
+            isPreviousLineATask = false;
+            continue;
+        }
 
         // Header title
         if (lineTrimmed.startsWith("#")) {
@@ -723,6 +729,7 @@ void NoteEditorLogic::saveNoteToDB()
 
 void NoteEditorLogic::closeEditor()
 {
+    m_textEdit->screenshots()->closeEditor();
     if (currentEditingNoteId() != INVALID_NODE_ID) {
         saveNoteToDB();
         emit noteEditClosed(m_currentNotes[0], false);
@@ -771,6 +778,8 @@ void NoteEditorLogic::deleteCurrentNote()
 
 QString NoteEditorLogic::getNthLine(const QString &str, int targetLineNumber)
 {
+    const QString readable = ScreenshotBlocks::readableText(str);
+    if (readable != str) return getNthLine(readable, targetLineNumber);
     if (targetLineNumber < 1) {
         return tr("Invalid line number");
     }
@@ -824,6 +833,7 @@ QString NoteEditorLogic::getSecondLine(const QString &str)
 
 void NoteEditorLogic::setTheme(Theme::Value theme, QColor textColor, qreal fontSize)
 {
+    m_textEdit->screenshots()->setTheme(theme, textColor);
     m_tagListDelegate->setTheme(theme);
     m_highlighter->setTheme(theme, textColor, fontSize);
     switch (theme) {
@@ -842,7 +852,8 @@ void NoteEditorLogic::setTheme(Theme::Value theme, QColor textColor, qreal fontS
     }
     if (currentEditingNoteId() != INVALID_NODE_ID) {
         int verticalScrollBarValueToRestore = m_textEdit->verticalScrollBar()->value();
-        m_textEdit->setText(m_textEdit->toPlainText()); // TODO: Update the text color without setting the text
+        if (m_textEdit->screenshots()->cards().isEmpty())
+            m_textEdit->setText(m_textEdit->toPlainText());
         m_textEdit->verticalScrollBar()->setValue(verticalScrollBarValueToRestore);
     } else {
         int verticalScrollBarValueToRestore = m_textEdit->verticalScrollBar()->value();

@@ -1,4 +1,5 @@
 #include "dbmanager.h"
+#include "screenshotblocks.h"
 #include <QtSql/QSqlQuery>
 #include <QTimeZone>
 #include <QDateTime>
@@ -2682,7 +2683,14 @@ void DBManager::exportNotes(const QString &baseExportPath, const QString &extens
         QFile file(filePath);
         if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
             QTextStream out(&file);
-            out << content;
+            QString attachmentError;
+            const auto exported = ScreenshotBlocks::exportMarkdown(content, notePath, &attachmentError);
+            if (!attachmentError.isEmpty()) {
+                qWarning() << attachmentError;
+                emit showErrorMessage(tr("Export error"), attachmentError);
+            } else {
+                out << exported;
+            }
             file.close();
         } else {
             qDebug() << "Failed to export note:" << filePath;
