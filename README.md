@@ -3,6 +3,10 @@
 Windows x64 Portable-версия на базе [официального Notes](https://github.com/nuttyartist/notes).
 Текущая зафиксированная версия форка: **v0.2.0**. Версия исходного приложения: 2.3.1.
 
+## Установка через Codex на другом ПК
+
+[Готовое задание для Codex](DEPLOY_WITH_CODEX.md) — скопируйте текст инструкции в чат на целевом Windows-ПК.
+
 ## Запуск
 
 1. Скачайте `Notes_ZHKVSKY_Portable_v0.2.0_Windows_x64.zip` из Releases.
