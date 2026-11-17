@@ -2544,6 +2544,9 @@ void MainWindow::makeStrikethrough()
  */
 void MainWindow::applyFormat(const QString &formatChars)
 {
+    const auto selection = m_textEdit->textCursor();
+    if (selection.selectedText().contains(QChar::ObjectReplacementCharacter)
+        || (!selection.hasSelection() && selection.block().text().contains(QChar::ObjectReplacementCharacter))) return;
     if (alreadyAppliedFormat(formatChars)) {
         resetFormat(formatChars);
         return;
@@ -2636,7 +2639,7 @@ void MainWindow::minimizeWindow()
 void MainWindow::quitApplication()
 {
     m_textEdit->screenshots()->closeEditor();
-    m_textEdit->screenshots()->waitForWrites();
+    if (!m_textEdit->screenshots()->waitForWrites()) return;
     if (windowState() != Qt::WindowFullScreen) {
         m_settingsDatabase->setValue(QStringLiteral("windowGeometry"), saveGeometry());
     }
@@ -2755,7 +2758,7 @@ void MainWindow::executeImport(const bool replace)
  */
 void MainWindow::exportNotesFile()
 {
-    m_textEdit->screenshots()->waitForWrites();
+    if (!m_textEdit->screenshots()->waitForWrites()) return;
     m_noteEditorLogic->saveNoteToDB();
     QString fileName = QFileDialog::getSaveFileName(this, tr("Save Notes"), "notes.nbk", tr("Notes Backup File (*.nbk)"));
     if (fileName.isEmpty()) {
@@ -4006,6 +4009,7 @@ void MainWindow::setHeading(int level)
 {
     QTextCursor cursor = m_textEdit->textCursor();
     cursor.select(QTextCursor::BlockUnderCursor);
+    if (cursor.selectedText().contains(QChar::ObjectReplacementCharacter)) return;
     QString newText = "\n";
     if (cursor.hasSelection()) {
         QString selectedText = cursor.selectedText();

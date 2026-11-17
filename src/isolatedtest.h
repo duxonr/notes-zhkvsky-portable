@@ -63,6 +63,17 @@ inline bool backupPortableFiles(const QStringList &files)
         if (QFileInfo(file).isSymLink()) return false;
         if (QFile::exists(file) && !QFile::copy(file, QDir(target).filePath(QFileInfo(file).fileName()))) return false;
     }
+    // Any future database migration must also preserve external image assets.
+    for (const auto &name : { QStringLiteral("Attachments"), QStringLiteral("Thumbnails") }) {
+        const QDir source(QDir(portableRoot()).filePath("Data/" + name));
+        if (!source.exists()) continue;
+        if (QFileInfo(source.path()).isSymLink()) return false;
+        const QDir destination(QDir(target).filePath(name));
+        if (!QDir().mkpath(destination.path())) return false;
+        for (const auto &entry : source.entryInfoList(QDir::Files | QDir::NoDotAndDotDot)) {
+            if (entry.isSymLink() || !QFile::copy(entry.absoluteFilePath(), destination.filePath(entry.fileName()))) return false;
+        }
+    }
     return true;
 }
 #endif

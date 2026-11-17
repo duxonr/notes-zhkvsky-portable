@@ -225,17 +225,18 @@ void NoteEditorLogic::onTextEditTextChanged()
     if (currentEditingNoteId() != INVALID_NODE_ID) {
         m_textEdit->blockSignals(true);
         QString content = m_currentNotes[0].content();
-        if (m_textEdit->toPlainText() != content) {
+        const QString updatedContent = m_textEdit->toPlainText();
+        if (updatedContent != content) {
             // move note to the top of the list
             emit moveNoteToListViewTop(m_currentNotes[0]);
 
             // Get the new data
-            QString firstline = getFirstLine(m_textEdit->toPlainText());
+            QString firstline = getFirstLine(updatedContent);
             QDateTime dateTime = QDateTime::currentDateTime();
             QString noteDate = dateTime.toString(Qt::ISODate);
             m_editorDateLabel->setText(NoteEditorLogic::getNoteDateEditor(noteDate));
             // update note data
-            m_currentNotes[0].setContent(m_textEdit->toPlainText());
+            m_currentNotes[0].setContent(updatedContent);
             if (!m_currentNotes[0].hasManualTitle()) m_currentNotes[0].setFullTitle(firstline);
             if (m_titleEdit) m_titleEdit->setPlaceholderText(m_currentNotes[0].fullTitle());
             m_currentNotes[0].setLastModificationDateTime(dateTime);
@@ -779,8 +780,6 @@ void NoteEditorLogic::deleteCurrentNote()
 
 QString NoteEditorLogic::getNthLine(const QString &str, int targetLineNumber)
 {
-    const QString readable = ScreenshotBlocks::withoutCards(str);
-    if (readable != str) return getNthLine(readable, targetLineNumber);
     if (targetLineNumber < 1) {
         return tr("Invalid line number");
     }
@@ -792,6 +791,7 @@ QString NoteEditorLogic::getNthLine(const QString &str, int targetLineNumber)
             lineCount++;
             if (lineCount >= targetLineNumber && (i - previousLineBreakIndex > 1 || (i > 0 && i == str.length() && str[i - 1] != '\n'))) {
                 QString line = str.mid(previousLineBreakIndex + 1, i - previousLineBreakIndex - 1);
+                if (line.contains("[!notes-screenshot:v1:")) line = ScreenshotBlocks::withoutCards(line);
                 line = line.trimmed();
                 if (!line.isEmpty() && !line.startsWith("---") && !line.startsWith("```")) {
                     QTextDocument doc;
@@ -824,6 +824,7 @@ QString NoteEditorLogic::getNthLine(const QString &str, int targetLineNumber)
  */
 QString NoteEditorLogic::getFirstLine(const QString &str)
 {
+    if (str.contains("[!notes-screenshot:v1:") && ScreenshotBlocks::withoutCards(str).trimmed().isEmpty()) return tr("New Note");
     return getNthLine(str, 1);
 }
 

@@ -6,6 +6,7 @@
 #include "screenshotblocks.h"
 #include <QMimeData>
 #include <QMenu>
+#include <QClipboard>
 
 CustomDocument::CustomDocument(QWidget *parent) : QTextEdit(parent)
 {
@@ -105,13 +106,19 @@ bool CustomDocument::eventFilter(QObject *obj, QEvent *event)
 
 QString CustomDocument::toPlainText() const
 {
+    const QString text=QTextEdit::toPlainText();
+    if(!text.contains(QChar::ObjectReplacementCharacter))return text;
     QTextCursor all(document()); all.select(QTextCursor::Document);
     return ScreenshotBlocks::serialize(all);
 }
 
 void CustomDocument::setText(const QString &text)
 {
+    const bool wasBlocked=signalsBlocked();
+    blockSignals(true);
     m_screenshots->load(text);
+    blockSignals(wasBlocked);
+    if(!wasBlocked)emit textChanged();
 }
 
 bool CustomDocument::canInsertFromMimeData(const QMimeData *source) const
@@ -132,9 +139,12 @@ void CustomDocument::insertFromMimeData(const QMimeData *source)
         if(imagesOnly){for(const auto &url:source->urls())m_screenshots->insertImage({},url.toLocalFile());return;}
     }
     // Explicit text takes precedence over an HTML/image fallback from a browser.
-    if(source->hasImage() && !source->hasText()) {m_screenshots->insertImage(qvariant_cast<QImage>(source->imageData()));return;}
-    if(source->hasText()) {prepareTextInsertion();insertPlainText(source->text());}
-    else QTextEdit::insertFromMimeData(source);
+    if(source->hasImage() && (!source->hasText() || source->text().isEmpty())) {m_screenshots->insertImage(qvariant_cast<QImage>(source->imageData()));return;}
+    if(source->hasText()) {
+        auto edit=textCursor();edit.beginEditBlock();prepareTextInsertion();insertPlainText(source->text());edit.endEditBlock();
+    } else if(source->hasUrls()) {
+        QStringList urls;for(const auto &url:source->urls())urls<<url.toDisplayString();insertPlainText(urls.join('\n'));
+    }
 }
 
 QMimeData *CustomDocument::createMimeDataFromSelection() const
@@ -173,6 +183,10 @@ void CustomDocument::prepareTextInsertion()
 
 void CustomDocument::keyPressEvent(QKeyEvent *event)
 {
+    if(event->matches(QKeySequence::Paste)) {
+        insertFromMimeData(QGuiApplication::clipboard()->mimeData());
+        return;
+    }
     auto c=textCursor();
     if(!isReadOnly() && !c.hasSelection() && event->modifiers()==Qt::NoModifier){
         if(event->key()==Qt::Key_Backspace && c.atBlockStart() && c.block().previous().text()==QString(QChar::ObjectReplacementCharacter)){

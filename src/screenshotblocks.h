@@ -8,6 +8,7 @@
 #include <QImage>
 #include <QFuture>
 #include <QPointer>
+#include <QThreadPool>
 #include "editorsettingsoptions.h"
 
 class CustomDocument;
@@ -45,23 +46,28 @@ public:
     QList<QTextCursor> cards() const;
     QRect cardRect(const QTextCursor &) const;
     int pendingJobs() const { return m_pending.size(); }
-    void waitForWrites();
+    bool waitForWrites();
     QJsonObject metadata(const QTextCursor &) const;
     void removeCard(QTextCursor);
     void editCard(QTextCursor, bool description);
     bool descriptionOverflows(const QString &, qreal width) const;
 signals:
     void imageError(const QString &message);
+protected:
+    bool eventFilter(QObject *, QEvent *) override;
 private:
     struct Result { QImage thumbnail; QString error; };
+    struct ImportSource { QImage image; QString file; QJsonObject metadata; };
     void requestThumbnail(const QJsonObject &);
     void startJob(const QJsonObject &, const QImage &, const QString &, bool import);
     QColor surface(bool hovered) const;
     CustomDocument *m_editor;
+    QThreadPool m_imagePool;
     QCache<QString, QImage> m_thumbnails{32 * 1024}; // KiB, not original image count
     QSet<QString> m_pending;
     QSet<QString> m_missing;
     QList<QFuture<Result>> m_writes;
+    QHash<QString, ImportSource> m_imports;
     QPointer<QFrame> m_popup;
     QPointer<QLineEdit> m_title;
     QTextCursor m_editCursor;

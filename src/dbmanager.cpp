@@ -1230,7 +1230,7 @@ void DBManager::moveNode(int nodeId, const NodeData &target)
     QSqlQuery query(m_db);
     auto node = getNode(nodeId);
 
-    QString newAbsolutePath = QStringLiteral("%1%2%3").arg(target.absolutePath(), PATH_SEPARATOR).arg(nodeId);
+    QString newAbsolutePath = target.absolutePath() + QChar(PATH_SEPARATOR) + QString::number(nodeId);
     if (target.id() == TRASH_FOLDER_ID) {
         qint64 deletionTime = QDateTime::currentMSecsSinceEpoch();
         if (!query.prepare(QStringLiteral("UPDATE node_table SET parent_id = :parent_id, absolute_path = :absolute_path, "
