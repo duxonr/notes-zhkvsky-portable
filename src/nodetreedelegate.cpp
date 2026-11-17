@@ -113,6 +113,8 @@ void NodeTreeDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opti
     painter->fillRect(option.rect, m_currentBackgroundColor);
     if (itemType == NodeItem::NoTagItem) {
         paintBackgroundSelectable(painter, option, index);
+        if (!(option.state & QStyle::State_Selected) && static_cast<NodeTreeView *>(m_view)->noTagHighlighted(index))
+            painter->fillRect(option.rect, m_hoverColor);
         painter->setPen(option.state & QStyle::State_Selected ? m_titleSelectedColor : m_titleColor);
         painter->setFont(m_titleFont);
         painter->drawText(option.rect.adjusted(49, 0, -12, 0), Qt::AlignVCenter | Qt::AlignLeft, "NO TAG");

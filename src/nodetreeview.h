@@ -42,6 +42,7 @@ public:
     void setTheme(Theme::Value theme);
     Theme::Value theme() const;
     bool isDragging() const;
+    bool noTagHighlighted(const QModelIndex &index) const { return index.isValid() && m_noTagFeedback == index; }
     void reExpandC();
     void reExpandC(const QStringList &expanded);
 
@@ -81,6 +82,8 @@ private slots:
     void onCollapsed(const QModelIndex &index);
 
 private:
+    QPersistentModelIndex m_noTagFeedback;
+    void updateNoTagFeedback(const QModelIndex &index = QModelIndex());
     QSettings *m_folderColorSettings = nullptr;
     QHash<int, QColor> m_folderIconColors;
     QMenu *m_contextMenu;
@@ -116,6 +119,7 @@ protected:
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dropEvent(QDropEvent *event) override;
     void dragMoveEvent(QDragMoveEvent *event) override;
+    void dragLeaveEvent(QDragLeaveEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;

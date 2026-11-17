@@ -79,10 +79,43 @@ int main(int argc, char **argv) {
  for(uint glyph:{0xf65e,0xf303,0xf1f8,0xf53f})out<<"GLYPH="<<QString::number(glyph,16)<<":"<<QRawFont::fromFont(fa).supportsCharacter(glyph)<<"\n";out.flush();
  out<<"SUBFOLDER_GLYPH="<<QRawFont::fromFont(QFont("Material Symbols Outlined",12)).supportsCharacter(uint(0xe2c8))<<"\n";out.flush();
  int fails=0; auto check=[&](bool ok,const QString &name){out<<(ok?"PASS ":"FAIL ")<<name<<'\n';out.flush(); if(!ok)++fails;};
+ if(app.arguments().contains("--feedback-only")){QSettings startSettings(portableSettings(),QSettings::IniFormat);startSettings.setValue("theme","Dark");startSettings.sync();}
  MainWindow *window=new MainWindow; window->resize(1250,800); window->show();window->raise();window->activateWindow(); QTest::qWait(1200);
  auto *tree=window->findChild<NodeTreeView*>("treeView"); auto *model=qobject_cast<NodeTreeModel*>(tree->model()); auto *logic=window->findChild<TreeViewLogic*>();
  if(!tree||!model||!logic) return 3;
  window->findChild<QSplitter*>("splitter")->setSizes({300,250,700}); QTest::qWait(100);
+ if(app.arguments().contains("--feedback-only")) {
+   tree->setCurrentIndexC(model->getAllNotesButtonIndex());QTest::qWait(100);
+   window->findChild<QPushButton*>("newNoteButton")->click();QTest::qWait(300);
+   window->findChild<QTextEdit*>("textEdit")->insertPlainText("Automatic heading\nBody");QTest::qWait(150);
+   auto *title=window->findChild<QLineEdit*>("noteTitleEdit");title->setFocus();QTest::keyClicks(title,"Manual heading");QTest::qWait(100);
+   const auto hasVisibleText=[&](bool dark){
+     auto image=window->grab(QRect(title->mapTo(window,QPoint()),title->size())).toImage();
+     const int background=image.pixelColor(image.width()-10,10).lightness();int contrasting=0;
+     for(int y=10;y<image.height()-12;++y)for(int x=25;x<qMin(image.width()-25,250);++x){const int light=image.pixelColor(x,y).lightness();if(dark?light>150:light<100)++contrasting;}
+     return (dark?background<80:background>130) && contrasting>40;
+   };
+   check(hasVisibleText(true),"heading rendered contrast on dark startup");
+   for(auto theme:{Theme::Dark,Theme::Light,Theme::Sepia,Theme::Dark}){
+     window->setTheme(theme);QTest::qWait(80);
+     check(hasVisibleText(theme==Theme::Dark),"heading rendered contrast in theme "+QString::number(theme));
+   }
+   const QString saved=title->text();title->setText("");title->setPlaceholderText("Automatic heading");QTest::qWait(50);
+   check(hasVisibleText(true),"automatic heading placeholder visible in dark theme");title->setText(saved);
+   auto noTag=model->tagIndexFromId(NO_TAG_ID);tree->scrollTo(noTag);QTest::qWait(100);
+   const auto pixel=[&]{return tree->viewport()->grab().toImage().pixelColor(tree->visualRect(noTag).left()+8,tree->visualRect(noTag).center().y());};
+   QCursor::setPos(window->mapToGlobal(QPoint(window->width()-50,window->height()-50)));QEvent leave(QEvent::Leave);QApplication::sendEvent(tree,&leave);QTest::qWait(60);const QColor idle=pixel();
+   QPoint pos=tree->visualRect(noTag).center();QCursor::setPos(tree->viewport()->mapToGlobal(pos));QTest::mouseMove(tree->viewport(),pos);QTest::qWait(60);const QColor hovered=pixel();
+   check(hovered!=idle,"NO TAG paints hover background");
+   QCursor::setPos(window->mapToGlobal(QPoint(window->width()-50,window->height()-50)));QApplication::sendEvent(tree,&leave);QTest::qWait(60);
+   check(pixel()==idle,"NO TAG clears hover on leave");
+   QMimeData mime;mime.setData(NOTE_MIME,"999999");QDragEnterEvent enter(pos,Qt::MoveAction,&mime,Qt::LeftButton,Qt::NoModifier);QApplication::sendEvent(tree->viewport(),&enter);
+   QDragMoveEvent move(pos,Qt::MoveAction,&mime,Qt::LeftButton,Qt::NoModifier);QApplication::sendEvent(tree->viewport(),&move);QTest::qWait(60);
+   check(move.isAccepted() && pixel()!=idle,"NO TAG paints accepted note-drop target");
+   QDragLeaveEvent dragLeave;QApplication::sendEvent(tree->viewport(),&dragLeave);QTest::qWait(60);
+   check(pixel()==idle,"NO TAG clears target on drag cancellation");
+   out<<"FAILURES="<<fails<<"\n";out.flush();QMetaObject::invokeMethod(window,"quitApplication",Qt::DirectConnection);return fails?1:0;
+ }
  if(app.arguments().contains("--interactive")) {
    window->setTheme(Theme::Dark);tree->setCurrentIndexC(model->getAllNotesButtonIndex());QTest::qWait(500);
    window->findChild<QPushButton*>("newNoteButton")->click();QTest::qWait(300);window->findChild<QTextEdit*>("textEdit")->insertPlainText("# Drag probe\n\n**Markdown**");QTest::qWait(1000);

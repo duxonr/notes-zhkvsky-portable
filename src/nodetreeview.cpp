@@ -285,6 +285,22 @@ void NodeTreeView::onUpdateAbsPath(const QString &oldPath, const QString &newPat
     });
 }
 
+void NodeTreeView::updateNoTagFeedback(const QModelIndex &index)
+{
+    const QModelIndex target = index.data(NodeItem::ItemType).toInt() == NodeItem::NoTagItem ? index : QModelIndex();
+    if (m_noTagFeedback == target) return;
+    const auto previous = m_noTagFeedback;
+    m_noTagFeedback = target;
+    if (previous.isValid()) viewport()->update(visualRect(previous));
+    if (target.isValid()) viewport()->update(visualRect(target));
+}
+
+void NodeTreeView::dragLeaveEvent(QDragLeaveEvent *event)
+{
+    updateNoTagFeedback();
+    QTreeView::dragLeaveEvent(event);
+}
+
 void NodeTreeView::updateEditingIndex(QPoint pos)
 {
     auto index = indexAt(pos);
@@ -386,6 +402,7 @@ void NodeTreeView::currentChanged(const QModelIndex &current, const QModelIndex 
 
 void NodeTreeView::dragEnterEvent(QDragEnterEvent *event)
 {
+    updateNoTagFeedback();
     if (event->mimeData()->hasFormat(NOTE_MIME)) {
         event->acceptProposedAction();
     } else {
@@ -395,6 +412,7 @@ void NodeTreeView::dragEnterEvent(QDragEnterEvent *event)
 
 void NodeTreeView::dragMoveEvent(QDragMoveEvent *event)
 {
+    updateNoTagFeedback(event->mimeData()->hasFormat(NOTE_MIME) ? indexAt(event->position().toPoint()) : QModelIndex());
     if (event->mimeData()->hasFormat(NOTE_MIME)) {
         auto index = indexAt(event->position().toPoint());
         auto itemType = static_cast<NodeItem::Type>(index.data(NodeItem::Roles::ItemType).toInt());
@@ -431,12 +449,14 @@ void NodeTreeView::dragMoveEvent(QDragMoveEvent *event)
 
 void NodeTreeView::reset()
 {
+    updateNoTagFeedback();
     closeCurrentEditor();
     reExpandC();
 }
 
 void NodeTreeView::dropEvent(QDropEvent *event)
 {
+    updateNoTagFeedback();
     if (event->mimeData()->hasFormat(NOTE_MIME)) {
         auto dropIndex = indexAt(event->position().toPoint());
         if (dropIndex.isValid()) {
@@ -565,6 +585,7 @@ void NodeTreeView::setTreeSeparator(const QVector<QModelIndex> &newTreeSeparator
 
 void NodeTreeView::mouseMoveEvent(QMouseEvent *event)
 {
+    updateNoTagFeedback(indexAt(event->position().toPoint()));
     Q_D(NodeTreeView);
     QPoint topLeft;
     QPoint bottomRight = event->position().toPoint();
@@ -662,6 +683,7 @@ void NodeTreeView::mousePressEvent(QMouseEvent *event)
 
 void NodeTreeView::leaveEvent(QEvent *event)
 {
+    updateNoTagFeedback();
     if (!m_isContextMenuOpened && !m_isEditing) {
         closeCurrentEditor();
         QTreeView::leaveEvent(event);

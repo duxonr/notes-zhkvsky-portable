@@ -37,3 +37,12 @@ A clean Windows installation is not available for testing.
 ## Pre-existing issue outside this change
 
 Synthetic folder-move fixtures exposed an inherited path-formatting problem: DBManager::moveNode uses a char separator as the second QString::arg argument, which can be interpreted as a field width. The parent_id movement checks pass, but absolute_path can contain spaces/placeholders. This also appears in the prior row-fix fixture. This update does not repair existing user folder paths or broaden the requested change into a data migration. This limitation remains open for a separate fix.
+
+## Dark-title and NO TAG feedback correction
+
+Branch: `fix/dark-title-and-no-tag-feedback`.
+The title input now sets explicit theme text and placeholder colors in its own ID-scoped stylesheet; inherited application styles no longer replace the dark-theme foreground with black. Selection colors are explicit too.
+NO TAG now tracks ordinary hover and NOTE_MIME drag targets independently of editable sidebar rows. It uses the existing hover background, preserves selected-row coloring, and clears its target on leave, drag cancellation, drop and model reset. No database or settings format changes.
+
+Verification: `TEST/dark-hover-after` has 10 rendering/event checks, FAILURES=0, including initial dark startup, theme changes, placeholder contrast, hover, accepted note-drag target and cancellation. `TEST/dark-hover-regression` has the existing 75 checks, FAILURES=0, plus separate-process heading/Kanban persistence PASS. An ordinary Notes.exe in `TEST/Темная тема NO TAG` was also checked visually: manual and automatic headings are readable on dark, and a real note drag highlights NO TAG. Evidence image: `dark-title-no-tag-highlight.jpg` in that fixture.
+Full pre-update backup: `D:\01_PROJECTS\NOTES_ZHKVSKY\Backups\Notes_C_before_dark_hover_20261117_153259`.

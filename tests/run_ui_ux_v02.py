@@ -12,6 +12,7 @@ import shutil
 import subprocess
 
 parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--feedback-only', action='store_true')
 parser.add_argument('--build', type=Path, required=True)
 parser.add_argument('--runtime', type=Path, required=True)
 parser.add_argument('--qt', type=Path, required=True)
@@ -53,7 +54,7 @@ vcvars = Path(vs) / 'VC/Auxiliary/Build/vcvars64.bat'
 script = build / 'compile_ui_v02.cmd'
 script.write_text(f'@call "{vcvars}" >nul\n{command}\n@if errorlevel 1 exit /b 1\nlink @"{response}"\n')
 subprocess.run(['cmd.exe', '/d', '/c', str(script)], cwd=build, check=True)
-result = subprocess.run([str(out / 'UiDriver.exe')], cwd=out)
+result = subprocess.run([str(out / 'UiDriver.exe')] + (['--feedback-only'] if args.feedback_only else []), cwd=out)
 print((out / 'ui-test-report.txt').read_text(encoding='utf-8'))
 if result.returncode == 0:
     report_text = (out / 'ui-test-report.txt').read_text(encoding='utf-8')

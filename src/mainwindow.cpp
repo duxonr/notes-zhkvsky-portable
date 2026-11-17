@@ -1678,6 +1678,7 @@ void MainWindow::setupModelView()
     QFont headingFont(m_displayFont, 15, QFont::DemiBold);
     noteTitle->setFont(headingFont);
     noteTitle->setStyleSheet("QLineEdit { background: transparent; border: none; border-bottom: 1px solid #448ac9; padding: 5px 20px; margin: 0px 20px 6px 20px; }");
+    noteTitle->setProperty("baseStyle", noteTitle->styleSheet());
     int titlePosition = m_ui->verticalLayout_textEdit->indexOf(m_textEdit);
 #if QT_VERSION >= QT_VERSION_CHECK(6, 2, 0)
     if (m_kanbanWidget) titlePosition = qMin(titlePosition, m_ui->verticalLayout_textEdit->indexOf(m_kanbanWidget));
@@ -2381,8 +2382,10 @@ void MainWindow::setTheme(Theme::Value theme)
     setupTextEditStyleSheet(m_noteEditorLogic->currentMinimumEditorPadding(), m_noteEditorLogic->currentMinimumEditorPadding());
     m_noteEditorLogic->setTheme(theme, m_currentEditorTextColor, m_editorMediumFontSize);
     if (auto *title = findChild<QLineEdit *>("noteTitleEdit")) {
-        auto pal = title->palette(); pal.setColor(QPalette::Text, m_currentEditorTextColor);
-        pal.setColor(QPalette::PlaceholderText, m_currentEditorTextColor.lighter(130)); title->setPalette(pal);
+        const QColor placeholder = theme == Theme::Dark ? QColor("#a5adb5") : QColor("#6b6255");
+        title->setStyleSheet(title->property("baseStyle").toString() +
+            QStringLiteral(" QLineEdit#noteTitleEdit { color: %1; placeholder-text-color: %2; selection-color: white; selection-background-color: #448ac9; }")
+                .arg(m_currentEditorTextColor.name(), placeholder.name()));
     }
     m_listViewLogic->setTheme(theme);
     m_aboutWindow.setTheme(theme);
